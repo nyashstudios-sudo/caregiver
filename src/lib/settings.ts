@@ -42,3 +42,16 @@ export async function getPlatformFeePct(): Promise<number> {
   if (!Number.isFinite(raw) || raw < 0 || raw > 50) return 10;
   return raw;
 }
+
+/**
+ * KRA withholding tax rate applied to worker earnings at release, in %.
+ * Default5% — the Income Tax Act rate for fees paid to resident
+ * individuals (ITA s.35). Admins can lower it to0 (e.g. for qualifying
+ * small earners) from /admin/payments;0 disables withholding entirely.
+ * Snapshotted per earning, so past statements never change.
+ */
+export async function getWhtRatePct(): Promise<number> {
+  const raw = Number(await getSetting("whtRatePct", process.env.WHT_RATE_PCT ?? "5"));
+  if (!Number.isFinite(raw) || raw < 0 || raw > 30) return 5;
+  return raw;
+}

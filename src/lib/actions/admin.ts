@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
 import { logAdminAction } from "@/lib/audit";
-import { getPlatformFeePct, setSetting } from "@/lib/settings";
+import { getPlatformFeePct, getWhtRatePct, setSetting } from "@/lib/settings";
 
 async function requireAdmin(): Promise<string> {
   const user = await requireSession("/admin");
@@ -128,6 +128,29 @@ export async function updatePlatformFeeAction(formData: FormData): Promise<void>
   });
   revalidatePath("/admin/payments");
   redirect("/admin/payments?feesaved=1");
+}
+
+/**
+ * KRA compliance: withholding-tax rate applied to worker earnings (%,0–30;
+ * 0 disables withholding — e.g. for admins who have granted a documented
+ * exemption). Past statements keep their snapshotted rate.
+ */
+export async function updateWhtRateAction(formData: FormData): Promise<void> {
+  const actorId = await requireAdmin();
+
+  const raw = Number(String(formData.get("whtPct") ?? ""));
+  if (!Number.isFinite(raw) || raw < 0 || raw > 30) {
+    redirect("/admin/payments?error=wht");
+  }
+  const previous = await getWhtRatePct();
+  await setSetting("whtRatePct", String(raw), actorId);
+  await logAdminAction(actorId, "setting.update", {
+    type: "setting",
+    id: "whtRatePct",
+    meta: { from: previous, to: raw },
+  });
+  revalidatePath("/admin/payments");
+  redirect("/admin/payments?whtsaved=1");
 }
 
 /** Moderation: remove a review that breaks platform rules. */

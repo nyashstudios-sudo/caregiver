@@ -106,11 +106,19 @@ export default async function WorkerPortalPage({
             the directory.
           </p>
         </div>
-        {profile && (
-          <Link href={`/caretakers/${profile.id}`} className="btn btn-secondary">
-            View my public profile ↗
+        <div className="flex flex-wrap gap-2">
+          <Link href="/wallet/tax" className="btn btn-primary">
+            Earnings &amp; tax
           </Link>
-        )}
+          <Link href="/wallet" className="btn btn-secondary">
+            Wallet
+          </Link>
+          {profile && (
+            <Link href={`/caretakers/${profile.id}`} className="btn btn-secondary">
+              View my public profile ↗
+            </Link>
+          )}
+        </div>
       </div>
 
       {sp.saved && <p className="field-ok mb-4">✓ Profile saved — your directory listing is updated.</p>}

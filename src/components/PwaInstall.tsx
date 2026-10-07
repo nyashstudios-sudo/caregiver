@@ -30,6 +30,62 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
   return out;
 }
 
+/** Brand chip — the mirror-symmetric heart-in-cradle mark on the teal tile. */
+function BrandChip() {
+  return (
+    <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl">
+      <svg width="36" height="36" viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id="pwa-brand-g" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#2dd4bf" />
+            <stop offset="0.55" stopColor="#0d9488" />
+            <stop offset="1" stopColor="#0a5c56" />
+          </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="16" fill="url(#pwa-brand-g)" />
+        <g transform="translate(32 32) scale(0.86) translate(-32 -32)">
+          <g transform="translate(0 -1.5)">
+            <path
+              d="M32 40.8 C25.4 35.9 20.5 31.9 20.5 27.2 C20.5 23.6 23.4 21 26.8 21 C29.2 21 31 22.3 32 24 C33 22.3 34.8 21 37.2 21 C40.6 21 43.5 23.6 43.5 27.2 C43.5 31.9 38.6 35.9 32 40.8 Z"
+              fill="#ffffff"
+            />
+            <path
+              d="M17.2 31.6 C17.2 41.9 23.8 47.6 32 47.6 C40.2 47.6 46.8 41.9 46.8 31.6"
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="5.5"
+              strokeLinecap="round"
+            />
+          </g>
+        </g>
+      </svg>
+    </span>
+  );
+}
+
+/** Alert chip — soft brand tile with a drawn bell (brand palette, no emoji). */
+function BellChip() {
+  return (
+    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-soft">
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-brand-on-soft"
+        aria-hidden="true"
+      >
+        <path d="M6 9a6 6 0 1 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z" />
+        <path d="M10 19a2 2 0 0 0 4 0" />
+      </svg>
+    </span>
+  );
+}
+
 export function PwaInstall() {
   const [deferred, setDeferred] = useState<BIPEvent | null>(null);
   const [installed, setInstalled] = useState(false);
@@ -162,9 +218,7 @@ export function PwaInstall() {
     <div className="fixed inset-x-0 bottom-16 z-40 flex flex-col items-center gap-2 px-4 md:bottom-4">
       {showAlerts && (
         <div className="flex w-full max-w-sm items-center gap-2 rounded-2xl border border-brand/30 bg-surface/95 p-2.5 shadow-lg backdrop-blur">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-lg">
-            🔔
-          </span>
+          <BellChip />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-bold text-ink">Get instant alerts</p>
             <p className="truncate text-[11px] text-muted">
@@ -192,9 +246,7 @@ export function PwaInstall() {
 
       {showInstall && (
         <div className="flex w-full max-w-sm items-center gap-2 rounded-2xl border border-line bg-surface/95 p-2.5 shadow-lg backdrop-blur">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand text-lg text-white">
-            ⬇
-          </span>
+          <BrandChip />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-bold text-ink">Install Caregiver</p>
             <p className="truncate text-[11px] text-muted">

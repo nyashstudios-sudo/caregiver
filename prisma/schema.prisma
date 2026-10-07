@@ -70,6 +70,8 @@ model User {
   services         Service[]       @relation("WorkerServices")
   auditLogs        AdminAuditLog[] @relation("AuditActor")
   pushSubscriptions PushSubscription[]
+  ledger           LedgerEntry[]
+  taxWithholdings  TaxWithholding[]
 }
 
 /// Web Push endpoints registered by the PWA — powers message/booking alerts.
@@ -96,6 +98,11 @@ model Profile {
   avatarUrl        String?
   /// Set by an admin after vetting ID/qualifications — drives the public badge.
   verifiedAt       DateTime?
+  /// Worker's KRA Personal Identification Number (P123456789X) — printed on
+  /// the platform's withholding-tax statements. Optional by design: the
+  /// platform records tax withheld either way; workers stay responsible for
+  /// filing their own returns.
+  kraPin           String?
   
   caretakerDetails CaretakerDetails?
   createdAt        DateTime          @default(now())
@@ -148,6 +155,9 @@ model Booking {
   refundedAt  DateTime?
   /// Platform commission actually charged at release time (monetization ledger).
   feeAmount   Float?
+  /// KRA withholding tax (ITA s.35) withheld from the worker's payout at
+  /// release and remitted by the platform — shown on the worker's statement.
+  whtAmount   Float?
   /// The marketplace service this booking was created from, when applicable.
   serviceId   String?
   service     Service?     @relation(fields: [serviceId], references: [id], onDelete: SetNull)
@@ -185,6 +195,7 @@ model Wallet {
 }
 
 enum PaymentKind {
+  DEPOSIT         /// client → wallet (STK push top-up)
   BOOKING_PAYMENT /// client → platform (STK push), escrowed against a booking
   WITHDRAWAL      /// platform → user (B2C) from wallet balance
   REFUND          /// platform → client (B2C) after cancellation
@@ -220,6 +231,63 @@ model Payment {
 
   @@index([userId, createdAt])
   @@index([status, kind])
+}
+
+/// Every wallet movement, append-only, each row carrying the balance that
+/// resulted from it — the audit trail behind deposits, escrow releases,
+/// withdrawals and reversals. Money in is positive, money out negative.
+enum LedgerKind {
+  DEPOSIT             /// STK top-up credited to the wallet
+  BOOKING_PAYMENT     /// wallet → escrow (client paid a booking from balance)
+  REFUND              /// escrow → wallet (booking cancelled after payment)
+  RELEASE             /// escrow → worker wallet, net of platform fee and WHT
+  WITHDRAWAL          /// wallet → M-Pesa (B2C requested by the user)
+  WITHDRAWAL_REVERSAL /// failed B2C restored to the wallet
+}
+
+model LedgerEntry {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind         LedgerKind
+  /// Signed KES — positive credits, negative debits (whole KES on the rails).
+  amount       Float
+  /// Wallet balance immediately after this entry (runnable balance check).
+  balanceAfter Float
+  bookingId    String?
+  paymentId    String?
+  description  String?
+  createdAt    DateTime   @default(now())
+
+  @@index([userId, createdAt])
+  @@index([kind, createdAt])
+}
+
+/// KRA withholding tax deducted at source when worker earnings are released
+/// (Income Tax Act s.35 — the platform is the payer, so it withholds; the
+/// worker files their own return and claims the withheld amount as a credit).
+model TaxWithholding {
+  id        String   @id @default(cuid())
+  workerId  String
+  worker    User     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  bookingId String?  @unique
+  /// Escrowed booking value the income was earned on (KES, gross).
+  gross     Float
+  /// Platform commission withheld before tax (KES).
+  fee       Float
+  /// Rate applied, as a percent — snapshotted so later setting changes
+  /// never rewrite history on a statement.
+  whtRate   Float
+  /// Tax withheld and remitted by the platform (KES, whole shillings).
+  whtAmount Float
+  /// What the worker actually received (gross − fee − wht), KES.
+  net       Float
+  /// Statement bucket, "YYYY-MM" (month of release) for KRA records.
+  period    String
+  createdAt DateTime @default(now())
+
+  @@index([workerId, createdAt])
+  @@index([period])
 }
 
 enum PostStatus {

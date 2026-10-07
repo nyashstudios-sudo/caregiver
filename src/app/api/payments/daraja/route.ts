@@ -18,7 +18,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { releaseEarnings } from "@/lib/payments";
+import { creditDeposit, creditWallet, logLedger, releaseEarnings } from "@/lib/payments";
 
 type StkCallback = {
   MerchantRequestID?: string;
@@ -79,6 +79,13 @@ async function handleStk(cb: StkCallback): Promise<void> {
     return;
   }
 
+  // Wallet top-up: flip to SUCCESS, credit the balance and stamp the
+  // ledger in one transaction — the PENDING guard keeps it single-apply.
+  if (payment.kind === "DEPOSIT") {
+    await creditDeposit(payment.id, receipt || null);
+    return;
+  }
+
   // Settle payment + mark booking paid, atomically guarded on PENDING.
   const settled = await prisma.$transaction(async (tx) => {
     const res = await tx.payment.updateMany({
@@ -136,13 +143,19 @@ async function handleB2c(result: NonNullable<DarajaBody["Result"]>): Promise<voi
   });
   if (flipped.count === 0) return;
 
-  // Failed withdrawal → money was debited upfront, so restore it exactly once.
+  // Failed withdrawal → money was held upfront, so restore it with a
+  // matching reversal ledger entry — exactly once, right after the flip.
   if (!success && payment.kind === "WITHDRAWAL") {
-    await prisma.wallet.upsert({
-      where: { userId: payment.userId },
-      update: { balance: { increment: payment.amount } },
-      create: { userId: payment.userId, balance: payment.amount },
-    }).catch(() => undefined);
+    await prisma.$transaction(async (tx) => {
+      await creditWallet(tx, payment.userId, payment.amount);
+      await logLedger(tx, {
+        userId: payment.userId,
+        kind: "WITHDRAWAL_REVERSAL",
+        amount: payment.amount,
+        paymentId: payment.id,
+        description: "Withdrawal failed — balance restored",
+      });
+    });
   }
 }
 

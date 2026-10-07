@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatKES } from "@/lib/format";
-import { getPlatformFeePct } from "@/lib/settings";
-import { updatePlatformFeeAction } from "@/lib/actions/admin";
+import { getPlatformFeePct, getWhtRatePct } from "@/lib/settings";
+import { updatePlatformFeeAction, updateWhtRateAction } from "@/lib/actions/admin";
 
 export const metadata: Metadata = {
   title: "Payments (admin)",
@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 };
 
 const KIND_LABEL: Record<string, string> = {
+  DEPOSIT: "Deposit",
   BOOKING_PAYMENT: "Booking payment",
   WITHDRAWAL: "Withdrawal",
   REFUND: "Refund",
@@ -41,13 +42,13 @@ export default async function AdminPaymentsPage({
       ["PENDING", "SUCCESS", "FAILED"].includes(status)
         ? { status: status as "PENDING" | "SUCCESS" | "FAILED" }
         : {},
-      ["BOOKING_PAYMENT", "WITHDRAWAL", "REFUND"].includes(kind)
-        ? { kind: kind as "BOOKING_PAYMENT" | "WITHDRAWAL" | "REFUND" }
+      ["DEPOSIT", "BOOKING_PAYMENT", "WITHDRAWAL", "REFUND"].includes(kind)
+        ? { kind: kind as "DEPOSIT" | "BOOKING_PAYMENT" | "WITHDRAWAL" | "REFUND" }
         : {},
     ],
   };
 
-  const [payments, totals, grouped, walletAgg, feePct, feeEarned, escrowHeld] =
+  const [payments, totals, grouped, walletAgg, feePct, feeEarned, escrowHeld, whtPct, taxHeld, deposited] =
     await Promise.all([
       prisma.payment.findMany({
         where,
@@ -74,6 +75,16 @@ export default async function AdminPaymentsPage({
       prisma.booking.aggregate({
         where: { paidAt: { not: null }, releasedAt: null, refundedAt: null },
         _sum: { amount: true },
+      }),
+      getWhtRatePct(),
+      prisma.taxWithholding.aggregate({
+        _sum: { whtAmount: true, gross: true, fee: true, net: true },
+        _count: true,
+      }),
+      prisma.payment.aggregate({
+        where: { kind: "DEPOSIT", status: "SUCCESS" },
+        _sum: { amount: true },
+        _count: true,
       }),
     ]);
 
@@ -146,6 +157,72 @@ export default async function AdminPaymentsPage({
         )}
         {single(sp.error) === "fee" && (
           <p className="field-error mt-3">Rate must be between 0 and 50 percent.</p>
+        )}
+      </section>
+
+      {/* ── KRA withholding tax + deposits ──────────────────────── */}
+      <section className="mb-6 card p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-ink">KRA withholding &amp; deposits</h2>
+            <p className="text-sm text-muted">
+              Tax withheld from worker earnings at release (ITA s.35) is held for remittance to
+              KRA. Deposits are client funds that have landed in wallets via STK push.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <div className="rounded-xl bg-amber-100 px-4 py-2 text-center dark:bg-amber-950">
+              <p className="text-lg font-extrabold text-amber-800 dark:text-amber-200">
+                {formatKES(taxHeld._sum.whtAmount ?? 0)}
+              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide">
+                Tax withheld · {taxHeld._count} records (to remit)
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-100 px-4 py-2 text-center dark:bg-slate-800">
+              <p className="text-lg font-extrabold text-ink">
+                {formatKES(deposited._sum.amount ?? 0)}
+              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Client deposits · {deposited._count}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form action={updateWhtRateAction} className="mt-4 flex flex-wrap items-end gap-3">
+          <div>
+            <label className="label" htmlFor="whtPct">
+              Withholding tax rate (%)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="whtPct"
+                name="whtPct"
+                type="number"
+                min={0}
+                max={30}
+                step={0.5}
+                defaultValue={whtPct}
+                className="input w-28"
+              />
+              <span className="text-sm font-semibold text-muted">%</span>
+            </div>
+          </div>
+          <button type="submit" className="btn btn-primary">
+            Save WHT rate
+          </button>
+          <span className="text-xs text-muted">
+            Currently <strong className="text-ink">{whtPct}%</strong> — e.g. KES 1,000 gross
+            earnings release withholds KES {Math.round(1000 * whtPct) / 100} of tax. Snapshotted
+            per job: changing it never rewrites past statements.
+          </span>
+        </form>
+        {single(sp.whtsaved) && (
+          <p className="field-ok mt-3">✓ Withholding-tax rate updated and logged.</p>
+        )}
+        {single(sp.error) === "wht" && (
+          <p className="field-error mt-3">Rate must be between 0 and 30 percent.</p>
         )}
       </section>
 

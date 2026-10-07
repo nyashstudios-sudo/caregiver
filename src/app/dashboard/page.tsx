@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session";
 import { Avatar } from "@/components/Avatar";
 import { StatusBadge } from "@/components/Badges";
 import { updateBookingAction } from "@/lib/actions/bookings";
-import { PayBookingButton } from "@/components/PayButtons";
+import { PayBookingButton, PayFromWalletButton } from "@/components/PayButtons";
 import { ReviewForm } from "@/components/ReviewForm";
 import { formatKES } from "@/lib/format";
 
@@ -77,6 +77,13 @@ export default async function DashboardPage({
   const myPhone =
     (await prisma.user.findUnique({ where: { id: user.id }, select: { phone: true } }))?.phone ??
     "";
+  const walletBalance =
+    (
+      await prisma.wallet.findUnique({
+        where: { userId: user.id },
+        select: { balance: true },
+      })
+    )?.balance ?? 0;
 
   const pending = bookings.filter((b) => b.status === "PENDING").length;
   const accepted = bookings.filter((b) => b.status === "ACCEPTED").length;
@@ -245,11 +252,18 @@ export default async function DashboardPage({
                   booking.status !== "CANCELLED" &&
                   booking.status !== "COMPLETED" && (
                     <div className="mt-4 border-t border-line pt-4">
-                      <PayBookingButton
-                        bookingId={booking.id}
-                        amount={Math.round(booking.amount)}
-                        defaultPhone={myPhone}
-                      />
+                      <div className="space-y-2">
+                        <PayFromWalletButton
+                          bookingId={booking.id}
+                          amount={Math.round(booking.amount)}
+                          balance={walletBalance}
+                        />
+                        <PayBookingButton
+                          bookingId={booking.id}
+                          amount={Math.round(booking.amount)}
+                          defaultPhone={myPhone}
+                        />
+                      </div>
                     </div>
                   )}
                 {booking.paidAt && !booking.releasedAt && !booking.refundedAt && (

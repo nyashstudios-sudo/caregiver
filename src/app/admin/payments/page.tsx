@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatKES } from "@/lib/format";
+import { getPlatformFeePct } from "@/lib/settings";
+import { updatePlatformFeeAction } from "@/lib/actions/admin";
 
 export const metadata: Metadata = {
   title: "Payments (admin)",
@@ -45,24 +47,35 @@ export default async function AdminPaymentsPage({
     ],
   };
 
-  const [payments, totals, grouped, walletAgg] = await Promise.all([
-    prisma.payment.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      include: {
-        user: { include: { profile: { select: { fullName: true } } } },
-        booking: { select: { serviceDate: true, amount: true } },
-      },
-    }),
-    prisma.payment.aggregate({
-      where: { status: "SUCCESS" },
-      _sum: { amount: true },
-      _count: true,
-    }),
-    prisma.payment.groupBy({ by: ["kind", "status"], _sum: { amount: true }, _count: true }),
-    prisma.wallet.aggregate({ _sum: { balance: true } }),
-  ]);
+  const [payments, totals, grouped, walletAgg, feePct, feeEarned, escrowHeld] =
+    await Promise.all([
+      prisma.payment.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        include: {
+          user: { include: { profile: { select: { fullName: true } } } },
+          booking: { select: { serviceDate: true, amount: true } },
+        },
+      }),
+      prisma.payment.aggregate({
+        where: { status: "SUCCESS" },
+        _sum: { amount: true },
+        _count: true,
+      }),
+      prisma.payment.groupBy({ by: ["kind", "status"], _sum: { amount: true }, _count: true }),
+      prisma.wallet.aggregate({ _sum: { balance: true } }),
+      getPlatformFeePct(),
+      prisma.booking.aggregate({
+        where: { releasedAt: { not: null } },
+        _sum: { feeAmount: true },
+        _count: true,
+      }),
+      prisma.booking.aggregate({
+        where: { paidAt: { not: null }, releasedAt: null, refundedAt: null },
+        _sum: { amount: true },
+      }),
+    ]);
 
   const sumOf = (k: string, s: string) =>
     grouped.find((g) => g.kind === k && g.status === s)?._sum.amount ?? 0;
@@ -71,6 +84,71 @@ export default async function AdminPaymentsPage({
 
   return (
     <div>
+      {/* ── Monetization: commission rate + revenue ───────────────── */}
+      <section className="mb-6 card p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-ink">Monetization</h2>
+            <p className="text-sm text-muted">
+              Platform commission charged on worker earnings when escrow releases.
+              Applies to every future release; the env var is only a fallback.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <div className="rounded-xl bg-brand-soft px-4 py-2 text-center">
+              <p className="text-lg font-extrabold text-brand-on-soft">
+                {formatKES(feeEarned._sum.feeAmount ?? 0)}
+              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide">
+                Commission earned · {feeEarned._count} releases
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-100 px-4 py-2 text-center dark:bg-slate-800">
+              <p className="text-lg font-extrabold text-ink">
+                {formatKES(escrowHeld._sum.amount ?? 0)}
+              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                In escrow (unreleased)
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form action={updatePlatformFeeAction} className="mt-4 flex flex-wrap items-end gap-3">
+          <div>
+            <label className="label" htmlFor="feePct">
+              Commission rate (%)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="feePct"
+                name="feePct"
+                type="number"
+                min={0}
+                max={50}
+                step={0.5}
+                defaultValue={feePct}
+                className="input w-28"
+              />
+              <span className="text-sm font-semibold text-muted">%</span>
+            </div>
+          </div>
+          <button type="submit" className="btn btn-primary">
+            Save rate
+          </button>
+          <span className="text-xs text-muted">
+            Currently <strong className="text-ink">{feePct}%</strong> — e.g. KES 1,000 release
+            pays the worker KES {Math.round(1000 * (1 - feePct / 100)).toLocaleString("en-GB")}.
+          </span>
+        </form>
+        {single(sp.feesaved) && (
+          <p className="field-ok mt-3">✓ Commission rate updated and logged.</p>
+        )}
+        {single(sp.error) === "fee" && (
+          <p className="field-error mt-3">Rate must be between 0 and 50 percent.</p>
+        )}
+      </section>
+
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="card p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-muted">Collected (escrow)</p>

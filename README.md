@@ -17,15 +17,30 @@ The stack is Next.js 15 (App Router) on TypeScript, Prisma against Postgres (Sup
 
 **For caretakers**
 - Worker portal to manage the public profile: rates, experience, skills, bio, avatar, certifications.
+- Publish a **portfolio** of past work (photos, clients, outcomes) that shows on the public profile.
+- Publish fixed-price **services** in the marketplace — clients book them in one tap without negotiating.
 - Accept, complete or cancel requests; the wallet is credited automatically when a paid job completes.
 - Rate the client back — punctuality, communication, how the payment went. The review system works both ways.
 - Withdraw wallet balance to any Safaricom number (KES 100–70,000 per request).
 
-**For admins** (`/admin`)
-- Overview with live platform stats: active users, pending bookings, new signups, open messages.
-- User management: search, filter by role/status, suspend or restore accounts, promote to admin.
-- Booking monitor: every booking on the platform with filters and force-cancel.
-- Payments monitor: collections, withdrawals, refunds, wallet liability, per-transaction M-Pesa references.
+**Onboarding & trust**
+- Detailed, role-aware signup: clients get the essentials, workers add bio, experience, rate and skills up front (with a password strength meter and terms gate).
+- Email verification through Supabase: a code lands in your inbox and `/welcome` confirms it; the emailed link path works too. Google sign-ins skip it (Google already proved the address).
+- Admin **vetting**: new credential uploads sit in `/admin/verifications` as PENDING until approved; vetted workers get the public ✓ badge, unvetted ones show "Vetting in progress".
+
+**Marketplace** (`/services`)
+- Browse ready-to-book offers with category filters and search; each listing has its own SEO-ready page at `/services/[slug]` with Schema.org `Service` markup.
+- Booking from a listing locks in the listed price server-side — no client-side amount anywhere.
+
+**PWA** — installable on mobile: service worker with an offline fallback page, branded install prompt, and opt-in Web Push alerts for new messages and booking changes (permission is only ever requested on a tap).
+
+**For admins** (`/admin`) — an operator surface, deliberately separate from client/worker UI (admins are bounced away from `/dashboard`, `/worker` and `/wallet`):
+- Command-center overview: users, bookings funnel, escrow collected, commission earned, wallet liability, vetting backlog.
+- **Verifications** queue: approve/reject credential documents with notes, vet workers for the public badge.
+- User management: search, filter by role/status, suspend or restore, promote to admin, email-verified and vetting badges.
+- Booking monitor with filters and force-cancel; payments monitor with M-Pesa references and an editable **commission rate** (monetization) that overrides the env fallback.
+- **Integrations** board: live status of the database, storage, email verification, Daraja, Google OAuth and the site URL — env var names only, never values.
+- **Audit trail**: every privileged action (suspensions, vetting, payouts, settings) logged with actor, target and timestamp.
 - Contact inbox with open/resolved triage, plus a blog composer with drafts, publishing and cover images.
 
 **Messaging** — a two-sided inbox between any signed-in users. Unread counts, day separators, Enter-to-send. Entry points everywhere you'd expect: caretaker profiles, booking cards, profile pages.
@@ -44,7 +59,7 @@ clients   jane@client.app, brian@client.app  / Client123!
 workers   amina@caretaker.app + 7 more       / Worker123!
 ```
 
-Workers all share `Worker123!`. Emails follow the pattern `<name>@caretaker.app`.
+Workers all share `Worker123!`. Emails follow the pattern `<name>@caretaker.app`. Seeded accounts arrive email-verified and (for workers) pre-vetted; fresh signups walk through `/welcome` and land in the vetting queue.
 
 ---
 
@@ -68,14 +83,17 @@ Set these in `.env` locally and in Vercel → Settings → Environment Variables
 
 | Variable | What it does |
 | --- | --- |
-| `DATABASE_URL` | Postgres connection string. Use the Supabase **pooler** host on port 5432 with `sslmode=require`. |
+| `DATABASE_URL` | Postgres connection string for the app: Supabase **transaction pooler** (port 6543, `pgbouncer=true`) so serverless instances multiplex instead of exhausting session slots. |
+| `DIRECT_URL` | Session-pooler connection (port 5432) used by `prisma migrate` — migrations need real advisory locks. |
 | `AUTH_SECRET` | NextAuth JWT signing key. `openssl rand -base64 32` to generate. |
 | `AUTH_TRUST_HOST` | `true` behind Vercel/proxies. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only. Used by `/api/upload` to write to the storage bucket. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only. Uploads, admin user provisioning for verification emails. |
 | `STORAGE_BUCKET` | Upload bucket name (public, 5 MB, pdf/png/jpeg/webp). |
-| `NEXT_PUBLIC_SITE_URL` | Production URL. Drives canonicals, sitemap, robots and OG images — must match the real domain. |
+| `NEXT_PUBLIC_SITE_URL` | Production URL — currently `https://caregiver254.vercel.app`. Drives canonicals, sitemap, robots, OG images and manifest shortcuts. |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push keys (`npx web-push generate-vapid-keys --json`). Without them the PWA still installs; only push alerts stay off. |
+| `VAPID_SUBJECT` | Contact for push, e.g. `mailto:info@caregiver.co.ke`. |
 
 Optional — Google sign-in appears on login/signup only when both are set:
 
@@ -137,21 +155,31 @@ Post-deploy checks: `/robots.txt` and `/sitemap.xml` render, `/opengraph-image` 
 ```
 prisma/
   schema.prisma     User, Profile, CaretakerDetails, Certification, Booking,
-                    Review, Wallet, Payment, Message, BlogPost, ContactMessage
+                    Review, Wallet, Payment, Message, BlogPost, ContactMessage,
+                    PortfolioItem, Service, PlatformSetting, AdminAuditLog,
+                    PushSubscription
   migrations/       committed; applied by `migrate deploy`
   seed.ts           demo dataset (idempotent — resets its own tables)
 src/
-  app/              routes: public pages, /dashboard, /worker, /admin, /messages,
-                    /wallet, /account, /profile/[userId], API routes
-  components/       UI built from token classes in app/globals.css
+  app/              routes: public pages, /services, /welcome, /dashboard, /worker,
+                    /admin (overview, users, verifications, bookings, payments,
+                    posts, messages, audit, integrations), /messages, /wallet,
+                    /account, /profile/[userId], API routes (push, upload, payments)
+  components/       UI built from token classes in app/globals.css + PWA controller
   lib/
     auth.ts         NextAuth config + providers (credentials, phone, Google)
     daraja.ts       M-Pesa OAuth, STK Push, B2C — server-only
     payments.ts     escrow release/refund, wallet credit/debit
+    verify.ts       Supabase email verification (code + link paths)
+    audit.ts        append-only admin audit trail
+    settings.ts     DB-backed platform settings (commission rate)
+    notify.ts       Web Push sender
     actions/        server actions (auth, bookings, messages, payments, reviews,
-                    account, admin, contact, blog)
-  middleware.ts     role gating for /dashboard, /worker, /admin, /messages,
-                    /account, /wallet
+                    account, admin, contact, blog, portfolio, services, verify)
+  middleware.ts     role gating; admins are kept off /dashboard, /worker, /wallet
+public/
+  sw.js             service worker: offline fallback, static cache, push display
+  offline.html      branded offline page
 ```
 
 Security headers (CSP in production, HSTS, frame/COOP, permissions policy) live in `next.config.ts`. Login, OTP, password-change and withdrawal attempts are throttled in `src/lib/throttle.ts`.

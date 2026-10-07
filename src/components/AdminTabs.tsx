@@ -6,11 +6,14 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/users", label: "Users" },
+  { href: "/admin/verifications", label: "Verifications" },
   { href: "/admin/bookings", label: "Bookings" },
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/posts", label: "Blog posts" },
   { href: "/admin/posts/new", label: "New post" },
   { href: "/admin/messages", label: "Inbox" },
+  { href: "/admin/audit", label: "Audit" },
+  { href: "/admin/integrations", label: "Integrations" },
 ];
 
 export function AdminTabs() {
@@ -22,11 +25,7 @@ export function AdminTabs() {
         const active =
           tab.href === "/admin"
             ? pathname === tab.href
-            : tab.href === "/admin/posts/new"
-              ? pathname === tab.href
-              : tab.href === "/admin/posts"
-                ? pathname === tab.href
-                : pathname === tab.href || pathname.startsWith(tab.href + "/");
+            : pathname === tab.href || pathname.startsWith(tab.href + "/");
         return (
           <Link
             key={tab.href}

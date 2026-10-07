@@ -48,12 +48,18 @@ async function upsertBaseUser(data: SeedUser) {
   const passwordHash = await bcrypt.hash(data.password, 10);
   const user = await prisma.user.upsert({
     where: { email: data.email },
-    update: { role: data.role, phone: data.phone ?? undefined },
+    update: {
+      role: data.role,
+      phone: data.phone ?? undefined,
+      emailVerifiedAt: new Date(),
+    },
     create: {
       email: data.email,
       phone: data.phone ?? null,
       passwordHash,
       role: data.role,
+      // Demo accounts skip the email round-trip — real signups verify via OTP.
+      emailVerifiedAt: new Date(),
     },
   });
 
@@ -64,6 +70,8 @@ async function upsertBaseUser(data: SeedUser) {
       location: data.location,
       bio: data.bio ?? null,
       avatarUrl: data.avatar ? avatarUrl(data.avatar) : null,
+      // Demo workers arrive pre-vetted so badges render in the seed state.
+      ...(data.role === "WORKER" ? { verifiedAt: new Date() } : {}),
     },
     create: {
       userId: user.id,
@@ -71,6 +79,7 @@ async function upsertBaseUser(data: SeedUser) {
       location: data.location,
       bio: data.bio ?? null,
       avatarUrl: data.avatar ? avatarUrl(data.avatar) : null,
+      ...(data.role === "WORKER" ? { verifiedAt: new Date() } : {}),
     },
   });
 
@@ -106,6 +115,9 @@ async function seedCertifications(
       title: c.title,
       documentUrl: credentialUrl(c.file),
       issuedAt: c.issuedAt ?? null,
+      // Demo credentials arrive approved; fresh uploads start PENDING.
+      status: "APPROVED" as const,
+      reviewedAt: new Date(),
     })),
   });
 }
@@ -551,6 +563,192 @@ async function main() {
     await seedCertifications(details.id, w.certifications);
   }
 
+  // --- Marketplace services + portfolio -------------------------------
+  await prisma.service.deleteMany();
+  await prisma.portfolioItem.deleteMany();
+
+  const serviceSeed: Record<
+    string,
+    {
+      services: {
+        title: string;
+        slug: string;
+        category: string;
+        priceKes: number;
+        durationLabel: string;
+        description: string;
+      }[];
+      portfolio: {
+        title: string;
+        category: string;
+        clientName: string;
+        location: string;
+        description: string;
+        monthsAgo: number;
+      }[];
+    }
+  > = {
+    "amina@caretaker.app": {
+      services: [
+        {
+          title: "Full-day nanny cover (8 hours)",
+          slug: "full-day-nanny-cover-8-hours",
+          category: "Childcare",
+          priceKes: 3600,
+          durationLabel: "8 hours · same week",
+          description:
+            "Professional nanny cover for a full working day: meals, naps, school run and homework help. First-aid certified and used to twins. Bring your own transport for school runs within Nairobi."
+        },
+        {
+          title: "After-school babysitting (3 hours)",
+          slug: "after-school-babysitting-3-hours",
+          category: "Childcare",
+          priceKes: 1500,
+          durationLabel: "3 hours · same day",
+          description:
+            "Late-afternoon childcare while you wrap up at work: pick-up, snacks, homework and play time. Includes a short end-of-day report for parents."
+        },
+      ],
+      portfolio: [
+        {
+          title: "Twins care, Kilimani —18 months",
+          category: "Childcare",
+          clientName: "The Njoroge family",
+          location: "Kilimani, Nairobi",
+          description:
+            "Long-term nanny role caring for18-month-old twins: routine building, developmental play and after-nursery care.",
+          monthsAgo: 8,
+        },
+        {
+          title: "Newborn night shifts",
+          category: "Newborn care",
+          clientName: "Private household",
+          location: "Lavington, Nairobi",
+          description:
+            "Six weeks of night doula support — feeding assistance, sleep routine and postpartum reassurance for first-time parents.",
+          monthsAgo: 14,
+        },
+      ],
+    },
+    "james@caretaker.app": {
+      services: [
+        {
+          title: "Elder care day visit (6 hours)",
+          slug: "elder-care-day-visit-6-hours",
+          category: "Elder care",
+          priceKes: 3000,
+          durationLabel: "6 hours · book1 day ahead",
+          description:
+            "Companion and mobility support for seniors at home: medication reminders, light exercises, meals and company. Trained in dementia-aware care."
+        },
+        {
+          title: "Home nurse aide consultation",
+          slug: "home-nurse-aide-consultation",
+          category: "Elder care",
+          priceKes: 1200,
+          durationLabel: "1 hour · video or home visit",
+          description:
+            "Sit-down assessment of care needs for an elderly relative: daily living review, safety checklist and a written care plan you can act on."
+        },
+      ],
+      portfolio: [
+        {
+          title: "Post-stroke recovery support",
+          category: "Elder care",
+          clientName: "The Kamau family",
+          location: "Westlands, Nairobi",
+          description:
+            "Three months of daily visits supporting a74-year-old through stroke rehabilitation — physio prompts, medication tracking and meals.",
+          monthsAgo: 5,
+        },
+      ],
+    },
+    "sarah@caretaker.app": {
+      services: [
+        {
+          title: "Deep house cleaning (4 hours)",
+          slug: "deep-house-cleaning-4-hours",
+          category: "Housekeeping",
+          priceKes: 2500,
+          durationLabel: "4 hours · same day",
+          description:
+            "Top-to-bottom clean: kitchen degrease, bathrooms, floors, windows and laundry folding. Cleaning supplies included on request at no extra cost."
+        },
+        {
+          title: "Weekly home management",
+          slug: "weekly-home-management",
+          category: "Housekeeping",
+          priceKes: 8000,
+          durationLabel: "Weekly · recurring",
+          description:
+            "Full house management once a week — cleaning, laundry, groceries list, meal prep planning and minor vendor coordination (gas, water, deliveries)."
+        },
+      ],
+      portfolio: [
+        {
+          title: "Estate-wide deep clean",
+          category: "Housekeeping",
+          clientName: "4-bedroom estate",
+          location: "Karen, Nairobi",
+          description:
+            "Two-day deep clean for a family relocating abroad — including pantry reset, appliance detailing and linen inventory.",
+          monthsAgo: 3,
+        },
+      ],
+    },
+    "mercy@caretaker.app": {
+      services: [
+        {
+          title: "Relaxation massage at home (1 hour)",
+          slug: "relaxation-massage-at-home-1-hour",
+          category: "Wellness & massage",
+          priceKes: 2500,
+          durationLabel: "1 hour · same day",
+          description:
+            "Certified therapist brings the table and oils to your home: full-body relaxation massage with aromatherapy options. Ideal for desk-strain and stress."
+        },
+      ],
+      portfolio: [
+        {
+          title: "Corporate wellness day",
+          category: "Wellness & massage",
+          clientName: "Tech firm, Westlands",
+          location: "Westlands, Nairobi",
+          description:
+            "Ran a6-chair chair-massage station for120 staff during their wellness week — posture-focused10-minute sessions.",
+          monthsAgo: 6,
+        },
+      ],
+    },
+  };
+
+  for (const [email, content] of Object.entries(serviceSeed)) {
+    const workerId = (
+      await prisma.user.findUnique({ where: { email }, select: { id: true } })
+    )?.id;
+    if (!workerId) continue;
+    for (const [index, s] of content.services.entries()) {
+      await prisma.service.create({
+        data: { workerId, active: true, ...s, createdAt: daysAgo(20 - index * 3, 10) },
+      });
+    }
+    for (const [index, p] of content.portfolio.entries()) {
+      await prisma.portfolioItem.create({
+        data: {
+          workerId,
+          title: p.title,
+          category: p.category,
+          clientName: p.clientName,
+          location: p.location,
+          description: p.description,
+          completedAt: new Date(Date.now() - p.monthsAgo * 30 * 86_400_000),
+          sortOrder: index,
+          createdAt: daysAgo(p.monthsAgo * 30, 12),
+        },
+      });
+    }
+  }
+
   // --- Bookings ---------------------------------------------------------
   const idOf = async (email: string) =>
     (await prisma.user.findUnique({ where: { email }, select: { id: true } }))?.id;
@@ -703,17 +901,20 @@ async function main() {
     });
   }
 
-  const [users, profiles, details, certs, bookings, posts, dms] = await Promise.all([
-    prisma.user.count(),
-    prisma.profile.count(),
-    prisma.caretakerDetails.count(),
-    prisma.certification.count(),
-    prisma.booking.count(),
-    prisma.blogPost.count(),
-    prisma.message.count(),
-  ]);
+  const [users, profiles, details, certs, bookings, posts, dms, services, portfolio] =
+    await Promise.all([
+      prisma.user.count(),
+      prisma.profile.count(),
+      prisma.caretakerDetails.count(),
+      prisma.certification.count(),
+      prisma.booking.count(),
+      prisma.blogPost.count(),
+      prisma.message.count(),
+      prisma.service.count(),
+      prisma.portfolioItem.count(),
+    ]);
   console.log(
-    `Seed complete — users: ${users}, profiles: ${profiles}, caretaker details: ${details}, certifications: ${certs}, bookings: ${bookings}, posts: ${posts}, dms: ${dms}`
+    `Seed complete — users: ${users}, profiles: ${profiles}, caretaker details: ${details}, certifications: ${certs}, bookings: ${bookings}, posts: ${posts}, dms: ${dms}, services: ${services}, portfolio: ${portfolio}`
   );
 }
 

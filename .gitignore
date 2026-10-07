@@ -54,3 +54,6 @@ next-env.d.ts
 .freebuff/
 .DS_Store
 Thumbs.db
+
+.vercel
+.env*

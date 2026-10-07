@@ -36,6 +36,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (existing.status === "SUSPENDED") return false;
           user.id = existing.id;
           (user as { role?: Role }).role = existing.role;
+          // Google attests the address — treat it as verified from day one.
+          if (!existing.emailVerifiedAt) {
+            await prisma.user
+              .update({ where: { id: existing.id }, data: { emailVerifiedAt: new Date() } })
+              .catch(() => undefined);
+          }
           // Keep the display name fresh from Google.
           if (!existing.profile && user.name) {
             await prisma.profile.create({
@@ -50,6 +56,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const created = await prisma.user.create({
           data: {
             email,
+            // Google already proved ownership of this address.
+            emailVerifiedAt: new Date(),
             // Unusable random hash — this account can only sign in via Google.
             passwordHash: await hashPassword(randomBytes(32).toString("hex")),
             role,

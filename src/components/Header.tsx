@@ -17,6 +17,7 @@ function initialsOf(name: string | null, email: string): string {
 
 const NAV_LINKS = [
   { href: "/caretakers", label: "Find caretakers" },
+  { href: "/services", label: "Services" },
   { href: "/blog", label: "Blog" },
   { href: "/faq", label: "FAQ", authOnlyHide: true },
   { href: "/about", label: "About", authOnlyHide: true },
@@ -30,37 +31,54 @@ export function Header({ user }: { user: SessionUser | null }) {
         {/* Brand */}
         <Logo size={36} />
 
-        {/* Desktop nav — informational links drop out once signed in */}
+        {/*
+          Desktop nav — informational links drop out once signed in, and the
+          admin role gets an operator-only set (no booking/wallet surfaces).
+        */}
         <nav className="hidden items-center gap-6 text-sm font-medium text-muted lg:flex">
-          {NAV_LINKS.filter((link) => !link.authOnlyHide || !user).map((link) => (
-            <Link key={link.href} href={link.href} className="transition hover:text-brand">
-              {link.label}
-            </Link>
-          ))}
-          {user && (user.role === "CLIENT" || user.role === "ADMIN") && (
-            <Link href="/dashboard" className="transition hover:text-brand">
-              My bookings
-            </Link>
-          )}
-          {user && user.role === "WORKER" && (
-            <Link href="/worker" className="transition hover:text-brand">
-              Worker portal
-            </Link>
-          )}
-          {user && (
-            <Link href="/messages" className="transition hover:text-brand">
-              Messages
-            </Link>
-          )}
-          {user && (
-            <Link href="/wallet" className="transition hover:text-brand">
-              Wallet
-            </Link>
-          )}
-          {user && user.role === "ADMIN" && (
-            <Link href="/admin" className="transition hover:text-brand">
-              Admin
-            </Link>
+          {user?.role === "ADMIN" ? (
+            <>
+              <Link href="/admin" className="transition hover:text-brand">
+                Admin portal
+              </Link>
+              <Link href="/admin/verifications" className="transition hover:text-brand">
+                Verifications
+              </Link>
+              <Link href="/blog" className="transition hover:text-brand">
+                Blog
+              </Link>
+              <Link href="/messages" className="transition hover:text-brand">
+                Messages
+              </Link>
+            </>
+          ) : (
+            <>
+              {NAV_LINKS.filter((link) => !link.authOnlyHide || !user).map((link) => (
+                <Link key={link.href} href={link.href} className="transition hover:text-brand">
+                  {link.label}
+                </Link>
+              ))}
+              {user && user.role === "CLIENT" && (
+                <Link href="/dashboard" className="transition hover:text-brand">
+                  My bookings
+                </Link>
+              )}
+              {user && user.role === "WORKER" && (
+                <Link href="/worker" className="transition hover:text-brand">
+                  Worker portal
+                </Link>
+              )}
+              {user && (
+                <Link href="/messages" className="transition hover:text-brand">
+                  Messages
+                </Link>
+              )}
+              {user && (
+                <Link href="/wallet" className="transition hover:text-brand">
+                  Wallet
+                </Link>
+              )}
+            </>
           )}
         </nav>
 

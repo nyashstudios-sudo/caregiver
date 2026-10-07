@@ -3,13 +3,19 @@
 import { useActionState, useEffect, useState } from "react";
 import { createBookingAction, type BookingState } from "@/lib/actions/bookings";
 
-/** "Book Caretaker" action form shown on worker profile views. */
+/**
+ * "Book Caretaker" action form shown on worker profile views. When a fixed
+ * price `service` is passed the form books that listing instead of the
+ * hourly rate — price comes from the server either way.
+ */
 export function BookingForm({
   workerId,
   workerName,
+  service,
 }: {
   workerId: string;
   workerName: string;
+  service?: { id: string; title: string; priceKes: number; durationLabel?: string | null };
 }) {
   const [state, formAction, pending] = useActionState<BookingState, FormData>(
     createBookingAction,
@@ -29,11 +35,24 @@ export function BookingForm({
 
   return (
     <form action={formAction} className="card p-5">
-      <h2 className="mb-1 text-lg font-bold text-ink">Book {workerName}</h2>
-      <p className="mb-4 text-sm text-muted">
-        Send a booking request — it starts as <strong>PENDING</strong> until the caretaker
-        accepts it.
-      </p>
+      <h2 className="mb-1 text-lg font-bold text-ink">
+        {service ? `Book “${service.title}”` : `Book ${workerName}`}
+      </h2>
+      {service ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl bg-brand-soft px-4 py-3">
+          <span className="text-xl font-extrabold text-brand">
+            KES {service.priceKes.toLocaleString("en-GB")}
+          </span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            fixed price{service.durationLabel ? ` · ${service.durationLabel}` : ""}
+          </span>
+        </div>
+      ) : (
+        <p className="mb-4 text-sm text-muted">
+          Send a booking request — it starts as <strong>PENDING</strong> until the caretaker
+          accepts it.
+        </p>
+      )}
 
       {state?.error && (
         <p className="field-error" role="alert">
@@ -56,22 +75,24 @@ export function BookingForm({
             onChange={(e) => setWhen(e.target.value)}
           />
         </div>
-        <div>
-          <label className="label" htmlFor="hours">
-            Hours
-          </label>
-          <input
-            className="input"
-            id="hours"
-            name="hours"
-            type="number"
-            min={1}
-            max={12}
-            step={1}
-            defaultValue={4}
-            required
-          />
-        </div>
+        {!service && (
+          <div>
+            <label className="label" htmlFor="hours">
+              Hours
+            </label>
+            <input
+              className="input"
+              id="hours"
+              name="hours"
+              type="number"
+              min={1}
+              max={12}
+              step={1}
+              defaultValue={4}
+              required
+            />
+          </div>
+        )}
       </div>
 
       <div className="mb-4">
@@ -89,9 +110,10 @@ export function BookingForm({
       </div>
 
       <input type="hidden" name="workerId" value={workerId} />
+      {service && <input type="hidden" name="serviceId" value={service.id} />}
 
       <button type="submit" className="btn btn-navy w-full" disabled={pending}>
-        {pending ? "Booking…" : "Request booking"}
+        {pending ? "Booking…" : service ? "Book this service" : "Request booking"}
       </button>
     </form>
   );

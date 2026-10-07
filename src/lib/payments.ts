@@ -17,9 +17,10 @@
  */
 
 import { prisma } from "./prisma";
+import { getPlatformFeePct } from "./settings";
 import type { Booking } from "@prisma/client";
 
-/** Platform commission taken from worker earnings (env-overridable, %). */
+/** Platform commission taken from worker earnings — DB override → env → 10%. */
 export function platformFeePct(): number {
   const raw = Number(process.env.PLATFORM_FEE_PCT ?? 10);
   if (!Number.isFinite(raw) || raw < 0 || raw > 50) return 10;
@@ -51,14 +52,15 @@ export async function releaseEarnings(booking: Booking): Promise<boolean> {
 
   const gross = booking.amount ?? 0;
   if (gross <= 0) return false;
-  const fee = (gross * platformFeePct()) / 100;
+  const fee = (gross * (await getPlatformFeePct())) / 100;
+  const feeRounded = Math.round(fee * 100) / 100;
   const net = Math.round((gross - fee) * 100) / 100;
 
   return prisma.$transaction(async (tx) => {
     // Conditional marker: only one caller can flip releasedAt → no double credit.
     const res = await tx.booking.updateMany({
       where: { id: booking.id, releasedAt: null, paidAt: { not: null } },
-      data: { releasedAt: new Date() },
+      data: { releasedAt: new Date(), feeAmount: feeRounded },
     });
     if (res.count === 0) return false;
     await creditWallet(tx, booking.workerId, net);

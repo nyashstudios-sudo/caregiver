@@ -6,7 +6,7 @@ import { getSessionUser } from "@/lib/session";
 import { Avatar } from "@/components/Avatar";
 import { SkillBadges } from "@/components/Badges";
 import { BookingForm } from "@/components/BookingForm";
-import { formatKESRate } from "@/lib/format";
+import { formatKESRate, formatKES } from "@/lib/format";
 
 export async function generateMetadata({
   params,
@@ -61,6 +61,18 @@ export default async function CaretakerProfilePage({
   const completedJobs = await prisma.booking.count({
     where: { workerId: profile.userId, status: "COMPLETED" },
   });
+  const [listedServices, portfolioItems] = await Promise.all([
+    prisma.service.findMany({
+      where: { workerId: profile.userId, active: true },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    }),
+    prisma.portfolioItem.findMany({
+      where: { workerId: profile.userId },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+      take: 9,
+    }),
+  ]);
 
   return (
     <div className="container-page py-6 sm:py-8">
@@ -82,7 +94,11 @@ export default async function CaretakerProfilePage({
           />
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <h1 className="text-2xl font-extrabold sm:text-3xl">{profile.fullName}</h1>
-            <span className="badge bg-teal-400/20 text-teal-200">✓ Verified profile</span>
+            {profile.verifiedAt ? (
+              <span className="badge bg-teal-400/20 text-teal-200">✓ Vetted by Caregiver</span>
+            ) : (
+              <span className="badge bg-amber-400/20 text-amber-200">Vetting in progress</span>
+            )}
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
@@ -106,8 +122,9 @@ export default async function CaretakerProfilePage({
               isCertifiedMassage={details.isCertifiedMassage}
             />
             <span className="badge bg-white/15 text-white">
+              {details.certifications.filter((c) => c.status === "APPROVED").length}/
               {details.certifications.length} credential
-              {details.certifications.length === 1 ? "" : "s"} on file
+              {details.certifications.length === 1 ? "" : "s"} approved
             </span>
           </div>
           <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
@@ -157,6 +174,77 @@ export default async function CaretakerProfilePage({
               </div>
             </section>
 
+            {/* Fixed-price listings — book in one tap */}
+            {listedServices.length > 0 && (
+              <section>
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-ink">Ready-to-book services</h2>
+                  <Link
+                    href="/services"
+                    className="text-sm font-semibold text-brand hover:underline"
+                  >
+                    All services →
+                  </Link>
+                </div>
+                <ul className="grid gap-3 sm:grid-cols-2">
+                  {listedServices.map((svc) => (
+                    <li key={svc.id}>
+                      <Link
+                        href={`/services/${svc.slug}`}
+                        className="card block h-full p-4 transition hover:border-brand"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-bold leading-snug text-ink">{svc.title}</p>
+                          <span className="shrink-0 font-extrabold text-brand">
+                            {formatKES(svc.priceKes)}
+                          </span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-xs text-muted">{svc.description}</p>
+                        {svc.durationLabel && (
+                          <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                            {svc.durationLabel}
+                          </p>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Portfolio — proof of past work */}
+            {portfolioItems.length > 0 && (
+              <section>
+                <h2 className="mb-3 text-lg font-bold text-ink">Previous work</h2>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {portfolioItems.map((item) => (
+                    <figure key={item.id} className="overflow-hidden rounded-xl border border-line">
+                      {item.mediaUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.mediaUrl}
+                          alt={item.title}
+                          className="aspect-square w-full object-cover"
+                        />
+                      ) : (
+                        <div className="grid aspect-square w-full place-items-center bg-brand-soft text-3xl">
+                          🧩
+                        </div>
+                      )}
+                      <figcaption className="p-2.5">
+                        <p className="line-clamp-1 text-xs font-bold text-ink">{item.title}</p>
+                        <p className="line-clamp-1 text-[11px] text-muted">
+                          {[item.clientName, item.location].filter(Boolean).join(" · ") ||
+                            item.category ||
+                            ""}
+                        </p>
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section>
               <h2 className="mb-3 text-lg font-bold text-ink">Verification credentials</h2>
               {details.certifications.length === 0 ? (
@@ -169,7 +257,24 @@ export default async function CaretakerProfilePage({
                       className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
                     >
                       <div>
-                        <p className="font-semibold text-ink">{cert.title}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-ink">{cert.title}</p>
+                          <span
+                            className={`badge ${
+                              cert.status === "APPROVED"
+                                ? "badge-green"
+                                : cert.status === "REJECTED"
+                                  ? "badge-red"
+                                  : "badge-amber"
+                            }`}
+                          >
+                            {cert.status === "APPROVED"
+                              ? "✓ Approved"
+                              : cert.status === "REJECTED"
+                                ? "Rejected"
+                                : "In review"}
+                          </span>
+                        </div>
                         <p className="text-xs text-muted">Issued {formatDate(cert.issuedAt)}</p>
                       </div>
                       <a

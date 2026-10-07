@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
@@ -45,6 +46,8 @@ export default async function DashboardPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireSession("/dashboard");
+  // Admins are operators — the client/worker dashboard is not theirs.
+  if (user.role === "ADMIN") redirect("/admin");
 
   const sp = await searchParams;
 

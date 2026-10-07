@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0d9488" />
+    <title>Offline · Caregiver</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --teal: #0d9488;
+        --ink: #0f172a;
+        --muted: #64748b;
+        --bg: #f3f8f7;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #e2e8f0;
+          --muted: #94a3b8;
+          --bg: #0a121b;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        padding: 24px;
+        text-align: center;
+      }
+      .mark {
+        width: 84px;
+        height: 84px;
+        margin: 0 auto 20px;
+        border-radius: 22px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, #14b8a6, #0f766e);
+        color: #fff;
+        font-size: 44px;
+        font-weight: 900;
+        box-shadow: 0 14px 30px rgba(13, 148, 136, 0.35);
+      }
+      h1 { margin: 0 0 8px; font-size: 24px; letter-spacing: -0.02em; }
+      p { margin: 0 auto 22px; max-width: 34ch; color: var(--muted); line-height: 1.55; }
+      .btn {
+        display: inline-block;
+        padding: 12px 26px;
+        border-radius: 14px;
+        background: var(--teal);
+        color: #fff;
+        font-weight: 700;
+        text-decoration: none;
+        border: 0;
+        font-size: 15px;
+        cursor: pointer;
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--teal);
+        border: 1px solid rgba(13, 148, 136, 0.4);
+        margin-left: 10px;
+      }
+      .row { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+      .row .btn.ghost { margin-left: 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark">C</div>
+      <h1>You&apos;re offline</h1>
+      <p>
+        No connection right now — your bookings and messages will be here the
+        moment you&apos;re back online.
+      </p>
+      <div class="row">
+        <button class="btn" onclick="location.reload()">Try again</button>
+        <a class="btn ghost" href="/">Back home</a>
+      </div>
+    </main>
+  </body>
+</html>

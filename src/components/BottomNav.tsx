@@ -77,12 +77,14 @@ function itemsFor(role: Role | undefined): Item[] {
     ];
   }
   if (role === "ADMIN") {
+    // Operator tab bar: command center, vetting, moderation inbox — no
+    // client/worker booking surfaces.
     return [
-      { href: "/", label: "Home", icon: ICONS.home },
       { href: "/admin", label: "Admin", icon: ICONS.grid },
-      { href: "/dashboard", label: "Bookings", icon: ICONS.calendar },
-      { href: "/messages", label: "Messages", icon: ICONS.chat },
-      { href: "/account", label: "Account", icon: ICONS.user },
+      { href: "/admin/verifications", label: "Verify", icon: ICONS.briefcase },
+      { href: "/admin/users", label: "Users", icon: ICONS.user },
+      { href: "/admin/messages", label: "Inbox", icon: ICONS.chat },
+      { href: "/messages", label: "Chat", icon: ICONS.calendar },
     ];
   }
   if (role === "CLIENT") {

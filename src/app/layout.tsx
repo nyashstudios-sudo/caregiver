@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { BottomNav } from "@/components/BottomNav";
+import { PwaInstall } from "@/components/PwaInstall";
 import { getSessionUser } from "@/lib/session";
 
 const geistSans = Geist({
@@ -132,6 +133,7 @@ export default async function RootLayout({
         <main className="min-h-[60vh] pb-24 md:pb-0">{children}</main>
         <Footer />
         <BottomNav role={user?.role} />
+        <PwaInstall />
       </body>
     </html>
   );

@@ -36,6 +36,13 @@ export default async function AdminOverviewPage() {
     suspended,
     newUsers7d,
     unreadThreads,
+    pendingCredentials,
+    unverifiedWorkers,
+    activeServices,
+    gmv,
+    feesEarned,
+    walletLiability,
+    auditCount,
   ] = await Promise.all([
     prisma.user.count({ where: { role: "CLIENT", status: "ACTIVE" } }),
     prisma.user.count({ where: { role: "WORKER", status: "ACTIVE" } }),
@@ -47,7 +54,22 @@ export default async function AdminOverviewPage() {
     prisma.user.count({ where: { status: "SUSPENDED" } }),
     prisma.user.count({ where: { createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } } }),
     prisma.message.count({ where: { readAt: null } }),
+    prisma.certification.count({ where: { status: "PENDING" } }),
+    prisma.profile.count({
+      where: { verifiedAt: null, user: { role: "WORKER", status: "ACTIVE" } },
+    }),
+    prisma.service.count({ where: { active: true } }),
+    prisma.booking.aggregate({
+      where: { paidAt: { not: null }, refundedAt: null },
+      _sum: { amount: true },
+    }),
+    prisma.booking.aggregate({ where: { releasedAt: { not: null } }, _sum: { feeAmount: true } }),
+    prisma.wallet.aggregate({ _sum: { balance: true } }),
+    prisma.adminAuditLog.count(),
   ]);
+
+  const kes = (n: number | null | undefined) =>
+    `KES ${Math.round(n ?? 0).toLocaleString("en-GB")}`;
 
   const recentBookings = await prisma.booking.findMany({
     take: 5,
@@ -79,6 +101,51 @@ export default async function AdminOverviewPage() {
           <Stat label="Drafts" value={draftPosts} href="/admin/posts" />
           <Stat label="Contact messages (all)" value={messages} href="/admin/messages" />
           <Stat label="Suspended users" value={suspended} href="/admin/users?status=SUSPENDED" />
+        </div>
+      </section>
+
+      {/* Trust & safety + monetization — the operator's pulse. */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-ink">Trust &amp; safety</h2>
+          <Link
+            href="/admin/verifications"
+            className="text-sm font-semibold text-brand hover:underline"
+          >
+            Open vetting queue →
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Credentials awaiting review" value={pendingCredentials} href="/admin/verifications" />
+          <Stat label="Workers not yet vetted" value={unverifiedWorkers} href="/admin/verifications" />
+          <Stat label="Active service listings" value={activeServices} href="/services" />
+          <Stat label="Audit events logged" value={auditCount} href="/admin/audit" />
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-ink">Monetization</h2>
+          <Link
+            href="/admin/payments"
+            className="text-sm font-semibold text-brand hover:underline"
+          >
+            Payments &amp; fees →
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="card p-5">
+            <p className="text-3xl font-extrabold text-ink">{kes(gmv._sum.amount)}</p>
+            <p className="mt-1 text-sm font-medium text-muted">Escrow collected (net of refunds)</p>
+          </div>
+          <div className="card p-5">
+            <p className="text-3xl font-extrabold text-brand">{kes(feesEarned._sum.feeAmount)}</p>
+            <p className="mt-1 text-sm font-medium text-muted">Platform commission earned</p>
+          </div>
+          <div className="card p-5">
+            <p className="text-3xl font-extrabold text-ink">{kes(walletLiability._sum.balance)}</p>
+            <p className="mt-1 text-sm font-medium text-muted">Wallet liability (user balances)</p>
+          </div>
         </div>
       </section>
 

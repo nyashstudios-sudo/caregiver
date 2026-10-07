@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser, requireSession } from "@/lib/session";
+import { notifyUser } from "@/lib/notify";
 
 export type MessageState = { error?: string; ok?: boolean } | null;
 
@@ -40,6 +41,14 @@ export async function sendMessageAction(
   await prisma.message.create({
     data: { senderId: user.id, receiverId, body },
   });
+
+  // PWA push — best-effort alert on the receiver's installed app.
+  await notifyUser(receiverId, {
+    title: user.name ? `New message from ${user.name}` : "New message",
+    body: body.slice(0, 140),
+    url: `/messages/${user.id}`,
+    tag: `dm-${user.id}`,
+  }).catch(() => undefined);
 
   revalidatePath("/messages");
   revalidatePath(`/messages/${receiverId}`);

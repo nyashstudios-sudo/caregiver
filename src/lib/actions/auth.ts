@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { isValidPhone, issueOtp, normalizePhone } from "@/lib/otp";
 import { safeNext } from "@/lib/roles";
+import { sendVerificationEmail } from "@/lib/verify";
 import { clearFailures, isBlocked, registerFailure } from "@/lib/throttle";
 import type { ActionState } from "./state";
 
@@ -14,14 +15,41 @@ function zodError(err: z.ZodError): string {
   return err.issues.map((i) => i.message).join(" ");
 }
 
-const signupSchema = z.object({
-  fullName: z.string().trim().min(2, "Please enter your full name"),
-  email: z.email({ message: "Enter a valid email address" }),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  role: z.enum(["CLIENT", "WORKER"], { message: "Choose an account type" }),
-  location: z.string().trim().min(1, "Please enter your location"),
-  phone: z.string().trim().default(""),
-});
+const signupSchema = z
+  .object({
+    fullName: z.string().trim().min(2, "Please enter your full name"),
+    email: z.email({ message: "Enter a valid email address" }),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .refine((v) => /[A-Za-z]/.test(v), "Password needs at least one letter")
+      .refine((v) => /\d/.test(v), "Password needs at least one number"),
+    confirmPassword: z.string(),
+    role: z.enum(["CLIENT", "WORKER"], { message: "Choose an account type" }),
+    location: z.string().trim().min(1, "Please enter your location"),
+    phone: z.string().trim().default(""),
+    terms: z.literal("on", { message: "Please accept the terms to continue" }),
+    // Worker onboarding — feeds CaretakerDetails straight from signup.
+    bio: z.string().trim().max(600, "Bio is too long").optional().default(""),
+    yearsExperience: z.coerce
+      .number({ message: "Years of experience is required" })
+      .int("Years of experience must be a whole number")
+      .min(0, "Years of experience cannot be negative")
+      .max(60, "That seems too high — enter years under 60")
+      .optional(),
+    hourlyRate: z.coerce
+      .number({ message: "Hourly rate is required" })
+      .min(100, "Minimum rate is KES 100/hour")
+      .max(20000, "Maximum rate is KES 20,000/hour")
+      .optional(),
+    skillsSummary: z.string().trim().max(400, "Skills list is too long").optional().default(""),
+    hasFirstAid: z.coerce.boolean().optional().default(false),
+    isCertifiedMassage: z.coerce.boolean().optional().default(false),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 const loginSchema = z.object({
   email: z.email({ message: "Enter a valid email address" }),
@@ -42,9 +70,17 @@ export async function signupAction(
     fullName: formData.get("fullName"),
     email: formData.get("email"),
     password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword") ?? formData.get("password"),
     role: formData.get("role"),
     location: formData.get("location"),
     phone: formData.get("phone") ?? "",
+    terms: formData.get("terms"),
+    bio: formData.get("bio") ?? "",
+    yearsExperience: formData.get("yearsExperience") ?? undefined,
+    hourlyRate: formData.get("hourlyRate") ?? undefined,
+    skillsSummary: formData.get("skillsSummary") ?? "",
+    hasFirstAid: formData.get("hasFirstAid") === "on",
+    isCertifiedMassage: formData.get("isCertifiedMassage") === "on",
   });
   if (!parsed.success) return { error: zodError(parsed.error) };
 
@@ -53,7 +89,7 @@ export async function signupAction(
   const phone = parsed.data.phone ? normalizePhone(parsed.data.phone) : "";
 
   if (phone && !isValidPhone(phone)) {
-    return { error: "Phone must look like +263771234567" };
+    return { error: "Phone must look like +254712345678" };
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -75,9 +111,18 @@ export async function signupAction(
         create: {
           fullName,
           location,
+          bio: parsed.data.bio || null,
           caretakerDetails:
             role === "WORKER"
-              ? { create: { hourlyRate: 15, yearsExperience: 0 } }
+              ? {
+                  create: {
+                    hourlyRate: parsed.data.hourlyRate ?? 500,
+                    yearsExperience: parsed.data.yearsExperience ?? 0,
+                    hasFirstAid: parsed.data.hasFirstAid ?? false,
+                    isCertifiedMassage: parsed.data.isCertifiedMassage ?? false,
+                    skillsSummary: parsed.data.skillsSummary || null,
+                  },
+                }
               : undefined,
         },
       },
@@ -92,7 +137,9 @@ export async function signupAction(
     redirect("/login?registered=1");
   }
 
-  redirect(safeNext(String(formData.get("next") ?? ""), role));
+  // Kick off email verification — welcome screen shows the code entry.
+  await sendVerificationEmail(email).catch(() => undefined);
+  redirect("/welcome");
 }
 
 /** Email + password login. */

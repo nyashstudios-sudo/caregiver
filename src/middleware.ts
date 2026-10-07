@@ -17,11 +17,17 @@ export default auth((req) => {
     }
     // Workers manage their own portal; everyone else is kept out.
     if (pathname.startsWith("/worker") && role !== "WORKER") {
-      return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
+      return NextResponse.redirect(
+        new URL(role === "ADMIN" ? "/admin" : "/dashboard", req.nextUrl)
+      );
     }
     // The admin dashboard is strictly for ADMIN accounts.
     if (pathname.startsWith("/admin") && role !== "ADMIN") {
       return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
+    }
+    // Admins are strictly operators — no client/worker surfaces for them.
+    if (role === "ADMIN" && ["/dashboard", "/wallet"].some((p) => pathname.startsWith(p))) {
+      return NextResponse.redirect(new URL("/admin", req.nextUrl));
     }
     return NextResponse.next();
   }

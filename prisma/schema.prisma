@@ -1,6 +1,12 @@
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Runtime queries go through Supabase's transaction pooler so every
+  // serverless function instance multiplexes onto the backend pool instead
+  // of each burning one of the session pooler's fixed slots (EMAXCONNSESSION).
+  url = env("DATABASE_URL")
+  // Prisma CLI (migrate) uses this: transaction-mode pgbouncer cannot hold
+  // the advisory locks migrations rely on, so migrations get a real session.
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -26,6 +32,13 @@ enum BookingStatus {
   CANCELLED
 }
 
+/// Credential vetting pipeline — workers upload, admins approve or reject.
+enum CredentialStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -35,6 +48,12 @@ model User {
   status        UserStatus @default(ACTIVE)
   notifyByEmail Boolean   @default(true)
   lastLoginAt   DateTime?
+  /// Set when the Supabase-delivered code confirms the address.
+  emailVerifiedAt DateTime?
+  /// Last OTP send — drives the resend throttle.
+  verifySentAt    DateTime?
+  /// Companion Supabase Auth user used purely for email delivery.
+  authId          String?   @unique
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -47,6 +66,24 @@ model User {
   reviewsReceived  Review[]  @relation("ReviewsReceived")
   wallet           Wallet?
   payments         Payment[]
+  portfolio        PortfolioItem[] @relation("WorkerPortfolio")
+  services         Service[]       @relation("WorkerServices")
+  auditLogs        AdminAuditLog[] @relation("AuditActor")
+  pushSubscriptions PushSubscription[]
+}
+
+/// Web Push endpoints registered by the PWA — powers message/booking alerts.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Profile {
@@ -57,6 +94,8 @@ model Profile {
   location         String
   bio              String?
   avatarUrl        String?
+  /// Set by an admin after vetting ID/qualifications — drives the public badge.
+  verifiedAt       DateTime?
   
   caretakerDetails CaretakerDetails?
   createdAt        DateTime          @default(now())
@@ -83,6 +122,12 @@ model Certification {
   title              String
   documentUrl        String
   issuedAt           DateTime?
+  /// Admin vetting: new uploads start PENDING until reviewed.
+  status             CredentialStatus @default(PENDING)
+  reviewedAt         DateTime?
+  /// Admin who reviewed it (plain id — survives account removal).
+  reviewedBy         String?
+  reviewNote         String?
 }
 
 model Booking {
@@ -101,6 +146,11 @@ model Booking {
   paidAt      DateTime?
   releasedAt  DateTime?
   refundedAt  DateTime?
+  /// Platform commission actually charged at release time (monetization ledger).
+  feeAmount   Float?
+  /// The marketplace service this booking was created from, when applicable.
+  serviceId   String?
+  service     Service?     @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -192,9 +242,7 @@ model BlogPost {
   publishedAt   DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
-}
-
-/// Messages sent from the Contact Us page.
+}/// Messages sent from the Contact Us page.
 model ContactMessage {
   id         String    @id @default(cuid())
   name       String
@@ -203,7 +251,75 @@ model ContactMessage {
   subject    String?
   message    String
   handledAt  DateTime?
-  createdAt  DateTime  @default(now())
+  createdAt  DateTime   @default(now())
+}
+
+/// Worker portfolio — previous jobs, case studies and photos that market
+/// the worker's craft on their public profile and caretaker page.
+model PortfolioItem {
+  id          String    @id @default(cuid())
+  workerId    String
+  worker      User      @relation("WorkerPortfolio", fields: [workerId], references: [id], onDelete: Cascade)
+  title       String
+  description String?   @db.Text
+  category    String?
+  /// Image path served through /api/files (Supabase Storage).
+  mediaUrl    String?
+  clientName  String?
+  location    String?
+  projectUrl  String?
+  completedAt DateTime?
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([workerId, createdAt])
+}
+
+/// Fiverr-style service listings workers publish so clients can book a
+/// defined offer (scope + price) instead of negotiating from scratch.
+model Service {
+  id             String    @id @default(cuid())
+  workerId       String
+  worker         User      @relation("WorkerServices", fields: [workerId], references: [id], onDelete: Cascade)
+  title          String
+  slug           String    @unique
+  description    String    @db.Text
+  category       String
+  /// KES, integer — server-computed totals elsewhere never trust this client-side.
+  priceKes       Int
+  durationLabel  String?
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  bookings       Booking[]
+
+  @@index([workerId])
+  @@index([active, category])
+}
+
+/// Platform-wide configuration editable by admins (monetization, toggles).
+/// Falls back to env vars when a key has never been set.
+model PlatformSetting {
+  key         String    @id
+  value       String
+  updatedById String?
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Append-only trail of every privileged admin action (moderation, payouts,
+/// verification, settings) — the backbone of platform supervision.
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  targetType String?
+  targetId   String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action, createdAt])
 }
 
 /// In-app messaging pipeline between any two signed-in users.

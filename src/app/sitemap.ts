@@ -7,6 +7,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     "",
     "/caretakers",
+    "/services",
     "/about",
     "/blog",
     "/faq",
@@ -21,7 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   try {
-    const [posts, profiles] = await Promise.all([
+    const [posts, profiles, services] = await Promise.all([
       prisma.blogPost.findMany({
         where: { status: "PUBLISHED" },
         select: { slug: true, updatedAt: true },
@@ -29,6 +30,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       prisma.profile.findMany({
         where: { user: { role: "WORKER" }, caretakerDetails: { isNot: null } },
         select: { id: true, updatedAt: true },
+      }),
+      prisma.service.findMany({
+        where: { active: true },
+        select: { slug: true, updatedAt: true },
+        take: 300,
       }),
     ]);
 
@@ -43,6 +49,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       ...profiles.map((profile) => ({
         url: `${site}/caretakers/${profile.id}`,
         lastModified: profile.updatedAt,
+        changeFrequency: "weekly" as const,
+        priority: 0.8,
+      })),
+      ...services.map((service) => ({
+        url: `${site}/services/${service.slug}`,
+        lastModified: service.updatedAt,
         changeFrequency: "weekly" as const,
         priority: 0.8,
       })),

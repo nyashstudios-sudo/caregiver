@@ -8,6 +8,8 @@ import {
   type CertificationItem,
   type WorkerProfileInitial,
 } from "@/components/WorkerPortal";
+import { PortfolioManager, type PortfolioItem } from "@/components/PortfolioManager";
+import { ServiceManager, type ServiceItem } from "@/components/ServiceManager";
 
 export const metadata: Metadata = {
   title: "Worker portal",
@@ -54,6 +56,44 @@ export default async function WorkerPortalPage({
     title: c.title,
     documentUrl: c.documentUrl,
     issuedAt: c.issuedAt ? c.issuedAt.toISOString().slice(0, 10) : "",
+    status: c.status,
+    reviewNote: c.reviewNote,
+  }));
+
+  const [portfolioRows, serviceRows] = await Promise.all([
+    prisma.portfolioItem.findMany({
+      where: { workerId: user.id },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+      take: 30,
+    }),
+    prisma.service.findMany({
+      where: { workerId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+  ]);
+
+  const portfolio: PortfolioItem[] = portfolioRows.map((p) => ({
+    id: p.id,
+    title: p.title,
+    description: p.description,
+    category: p.category,
+    clientName: p.clientName,
+    location: p.location,
+    projectUrl: p.projectUrl,
+    mediaUrl: p.mediaUrl,
+    completedAt: p.completedAt ? p.completedAt.toISOString().slice(0, 7) : null,
+  }));
+
+  const services: ServiceItem[] = serviceRows.map((s) => ({
+    id: s.id,
+    title: s.title,
+    slug: s.slug,
+    description: s.description,
+    category: s.category,
+    priceKes: s.priceKes,
+    durationLabel: s.durationLabel,
+    active: s.active,
   }));
 
   return (
@@ -86,10 +126,33 @@ export default async function WorkerPortalPage({
       {sp.cert === "forbidden" && (
         <p className="field-error mb-4">You can only remove your own certifications.</p>
       )}
+      {sp.portfolio === "added" && <p className="field-ok mb-4">✓ Portfolio piece added.</p>}
+      {sp.portfolio === "removed" && <p className="field-ok mb-4">✓ Portfolio piece removed.</p>}
+      {sp.portfolio === "forbidden" && (
+        <p className="field-error mb-4">You can only manage your own portfolio.</p>
+      )}
+      {sp.service === "created" && (
+        <p className="field-ok mb-4">✓ Service published to the marketplace.</p>
+      )}
+      {sp.service === "updated" && <p className="field-ok mb-4">✓ Service updated.</p>}
+      {sp.service === "toggled" && (
+        <p className="field-ok mb-4">✓ Service visibility changed.</p>
+      )}
+      {sp.service === "deleted" && <p className="field-ok mb-4">✓ Service deleted.</p>}
+      {sp.service === "error" && (
+        <p className="field-error mb-4">
+          {typeof sp.e === "string" ? sp.e : "That service could not be saved."}
+        </p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <WorkerProfileForm initial={initial} />
         <CertificationManager certifications={certifications} />
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <PortfolioManager items={portfolio} />
+        <ServiceManager services={services} />
       </div>
     </div>
   );

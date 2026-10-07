@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
 import { releaseEarnings, refundToWallet } from "@/lib/payments";
+import { notifyUser } from "@/lib/notify";
 
 export type BookingState = { error?: string } | null;
 
@@ -18,7 +19,8 @@ export async function createBookingAction(
   const workerId = String(formData.get("workerId") ?? "");
   const when = String(formData.get("serviceDate") ?? "");
   const notes = String(formData.get("notes") ?? "").trim();
-  const hours = Math.min(12, Math.max(1, Number(formData.get("hours")) || 4));
+  const serviceIdRaw = String(formData.get("serviceId") ?? "");
+  let hours = Math.min(12, Math.max(1, Number(formData.get("hours")) || 4));
 
   const serviceDate = new Date(when);
   if (!workerId) return { error: "Caretaker not found" };
@@ -33,22 +35,43 @@ export async function createBookingAction(
   });
   if (!worker?.profile?.caretakerDetails) return { error: "Caretaker not found" };
 
-  // Agreed value computed server-side from the caretaker's current rate —
-  // the client can never post their own amount.
-  const hourlyRate = worker.profile.caretakerDetails.hourlyRate;
-  const amount = Math.round(hourlyRate * hours * 100) / 100;
+  // Fixed-price service bookings take the listed price (still server-side);
+  // ad-hoc bookings compute hours × the caretaker's current rate.
+  let serviceId: string | null = null;
+  let amount: number;
+  if (serviceIdRaw) {
+    const svc = await prisma.service.findFirst({
+      where: { id: serviceIdRaw, workerId, active: true },
+      select: { id: true, priceKes: true },
+    });
+    if (!svc) return { error: "That service is no longer available" };
+    serviceId = svc.id;
+    amount = svc.priceKes;
+    hours = 0;
+  } else {
+    const hourlyRate = worker.profile.caretakerDetails.hourlyRate;
+    amount = Math.round(hourlyRate * hours * 100) / 100;
+  }
 
   await prisma.booking.create({
     data: {
       clientId: user.id,
       workerId,
+      serviceId,
       serviceDate,
       notes: notes || null,
-      hours,
+      hours: serviceId ? null : hours,
       amount,
       status: "PENDING",
     },
   });
+
+  await notifyUser(workerId, {
+    title: "New booking request",
+    body: `${user.name ?? "A client"} requested a booking · KES ${amount.toLocaleString("en-GB")}`,
+    url: "/dashboard",
+    tag: "booking-new",
+  }).catch(() => undefined);
 
   redirect("/dashboard?booked=1");
 }
@@ -98,6 +121,20 @@ export async function updateBookingAction(formData: FormData): Promise<void> {
     // Escrow: completed → pay the caretaker; cancelled after payment → refund client.
     if (next === "COMPLETED") await releaseEarnings(updated).catch(() => false);
     if (next === "CANCELLED") await refundToWallet(updated).catch(() => false);
+
+    // PWA push to the counterparty.
+    const verb =
+      next === "ACCEPTED"
+        ? "accepted your booking"
+        : next === "COMPLETED"
+          ? "marked the job complete"
+          : "cancelled a booking";
+    await notifyUser(isClient ? booking.workerId : booking.clientId, {
+      title: "Booking update",
+      body: `${user.name ?? "Someone"} ${verb}`,
+      url: "/dashboard",
+      tag: `booking-${id}`,
+    }).catch(() => undefined);
   }
 
   redirect("/dashboard?updated=1");

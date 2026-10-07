@@ -21,15 +21,18 @@ export async function generateMetadata({
       profile: { select: { fullName: true, location: true } },
     },
   });
-  if (!user || user.role === "ADMIN" || user.status === "SUSPENDED") {
-    return { title: "Profile" };
+  if (!user) {
+    return { title: "Profile", robots: { index: false } };
   }
   const name = user.profile?.fullName ?? "Caregiver member";
   const where = user.profile?.location ? ` in ${user.profile.location}` : "";
+  const kind =
+    user.role === "WORKER" ? "caretaker" : user.role === "ADMIN" ? "Caregiver team" : "client";
   return {
-    title: `${name} — ${user.role === "WORKER" ? "caretaker" : "client"} profile${where}`,
+    title: `${name} — ${kind} profile${where}`,
     description: `${name}’s public Caregiver profile${where}. Reviews, credentials and booking history on Kenya’s home care platform.`,
     alternates: { canonical: `/profile/${userId}` },
+    robots: user.status === "SUSPENDED" ? { index: false } : undefined,
   };
 }
 
@@ -93,8 +96,9 @@ export default async function PublicProfilePage({
     },
   });
 
-  // Admins have no public profile page (privacy), everything else is public.
-  if (!user || user.role === "ADMIN") notFound();
+  // Every account gets a public profile page (the /account page links to it);
+  // suspended accounts stay hidden from everyone but admins.
+  if (!user) notFound();
   // Suspended accounts are hidden from the public web entirely.
   if (user.status === "SUSPENDED" && me?.role !== "ADMIN") notFound();
 
@@ -108,6 +112,19 @@ export default async function PublicProfilePage({
     _count: true,
   });
   const average = agg._avg.rating ?? 0;
+
+  const [portfolioItems, serviceItems] = await Promise.all([
+    prisma.portfolioItem.findMany({
+      where: { workerId: user.id },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+      take: 12,
+    }),
+    prisma.service.findMany({
+      where: { workerId: user.id, active: true },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    }),
+  ]);
   const reviewCount = agg._count;
 
   const completedAsWorker = await prisma.booking.count({
@@ -164,6 +181,9 @@ export default async function PublicProfilePage({
             <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
               <h1 className="text-2xl font-extrabold sm:text-3xl">{name}</h1>
               <span className="badge bg-white/15 text-white">{ROLE_LABEL[user.role]}</span>
+              {profile?.verifiedAt && (
+                <span className="badge bg-teal-400/25 text-teal-100">✓ Vetted</span>
+              )}
               {user.status === "SUSPENDED" && (
                 <span className="badge bg-red-500/30 text-red-200">Suspended</span>
               )}
@@ -259,6 +279,72 @@ export default async function PublicProfilePage({
                     {details.yearsExperience} years
                   </span>
                 </div>
+              </div>
+            </section>
+          )}
+
+          {/* Fixed-price marketplace listings */}
+          {serviceItems.length > 0 && (
+            <section className="card p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-ink">Book a service</h2>
+                <Link href="/services" className="text-sm font-semibold text-brand hover:underline">
+                  Marketplace →
+                </Link>
+              </div>
+              <ul className="divide-y divide-line">
+                {serviceItems.map((svc) => (
+                  <li key={svc.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/services/${svc.slug}`}
+                        className="font-semibold text-ink hover:text-brand"
+                      >
+                        {svc.title}
+                      </Link>
+                      <p className="text-xs text-muted">
+                        {svc.category}
+                        {svc.durationLabel ? ` · ${svc.durationLabel}` : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-bold text-brand">
+                      {formatKES(svc.priceKes)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Portfolio — previous work that markets the craft */}
+          {portfolioItems.length > 0 && (
+            <section className="card p-5">
+              <h2 className="mb-3 text-lg font-bold text-ink">Previous work</h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {portfolioItems.map((item) => (
+                  <figure key={item.id} className="overflow-hidden rounded-xl border border-line">
+                    {item.mediaUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.mediaUrl}
+                        alt={item.title}
+                        className="aspect-square w-full object-cover"
+                      />
+                    ) : (
+                      <div className="grid aspect-square w-full place-items-center bg-brand-soft text-3xl">
+                        🧩
+                      </div>
+                    )}
+                    <figcaption className="p-2.5">
+                      <p className="line-clamp-1 text-xs font-bold text-ink">{item.title}</p>
+                      <p className="line-clamp-1 text-[11px] text-muted">
+                        {[item.clientName, item.location].filter(Boolean).join(" · ") ||
+                          item.category ||
+                          ""}
+                      </p>
+                    </figcaption>
+                  </figure>
+                ))}
               </div>
             </section>
           )}

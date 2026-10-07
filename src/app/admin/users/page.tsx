@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Avatar } from "@/components/Avatar";
-import { setUserStatusAction, setUserRoleAction } from "@/lib/actions/admin";
+import { setUserStatusAction, setUserRoleAction, setUserVerifiedAction } from "@/lib/actions/admin";
 
 export const metadata: Metadata = {
   title: "Manage users (admin)",
@@ -49,7 +49,9 @@ export default async function AdminUsersPage({
   const users = await prisma.user.findMany({
     where,
     include: {
-      profile: { select: { fullName: true, avatarUrl: true, location: true } },
+      profile: {
+        select: { fullName: true, avatarUrl: true, location: true, verifiedAt: true },
+      },
       _count: { select: { clientBookings: true, workerBookings: true, receivedMessages: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -164,10 +166,25 @@ export default async function AdminUsersPage({
                       >
                         {u.role}
                       </span>
+                      {u.role === "WORKER" && u.profile?.verifiedAt && (
+                        <span className="badge badge-teal mt-1 block w-fit">✓ Vetted</span>
+                      )}
                     </td>
                     <td>
                       <span className={`badge ${u.status === "ACTIVE" ? "badge-teal" : "badge-red"}`}>
                         {u.status}
+                      </span>
+                      <span
+                        className={`badge mt-1 block w-fit ${
+                          u.emailVerifiedAt ? "badge-green" : "badge-amber"
+                        }`}
+                        title={
+                          u.emailVerifiedAt
+                            ? `Email verified ${u.emailVerifiedAt.toLocaleDateString("en-GB")}`
+                            : "Email not verified yet"
+                        }
+                      >
+                        {u.emailVerifiedAt ? "Email ✓" : "Email unverified"}
                       </span>
                     </td>
                     <td className="text-sm text-muted">
@@ -196,7 +213,21 @@ export default async function AdminUsersPage({
                             {u.status === "ACTIVE" ? "Suspend" : "Restore"}
                           </button>
                         </form>
-                        <div className="flex gap-1.5">
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          {u.role === "WORKER" && u.profile && (
+                            <form action={setUserVerifiedAction}>
+                              <input type="hidden" name="id" value={u.id} />
+                              <input type="hidden" name="next" value="/admin/users" />
+                              <input
+                                type="hidden"
+                                name="verified"
+                                value={u.profile.verifiedAt ? "0" : "1"}
+                              />
+                              <button type="submit" className="btn btn-secondary !px-2.5 !py-1 text-[11px]">
+                                {u.profile.verifiedAt ? "Un-vet" : "Vet worker"}
+                              </button>
+                            </form>
+                          )}
                           {u.role !== "ADMIN" && (
                             <form action={setUserRoleAction}>
                               <input type="hidden" name="id" value={u.id} />

@@ -26,6 +26,8 @@ export type CertificationItem = {
   title: string;
   documentUrl: string;
   issuedAt: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  reviewNote: string | null;
 };
 
 /** Edit profile + CaretakerDetails (rate, experience, badges, skills). */
@@ -240,8 +242,8 @@ export function CertificationManager({
     <div className="card p-6">
       <h2 className="mb-1 text-lg font-bold text-ink">Certifications</h2>
       <p className="mb-4 text-sm text-muted">
-        Upload PDF or image copies of your credentials (first aid, massage diplomas). They appear
-        on your public profile for clients to verify.
+        Upload PDF or image copies of your credentials (first aid, massage diplomas). An admin
+        vets each upload before it counts toward your public badge.
       </p>
 
       {state?.error && (
@@ -257,10 +259,30 @@ export function CertificationManager({
           {certifications.map((cert) => (
             <li key={cert.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
               <div>
-                <p className="font-semibold text-ink">{cert.title}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-semibold text-ink">{cert.title}</p>
+                  <span
+                    className={`badge ${
+                      cert.status === "APPROVED"
+                        ? "badge-green"
+                        : cert.status === "REJECTED"
+                          ? "badge-red"
+                          : "badge-amber"
+                    }`}
+                  >
+                    {cert.status === "APPROVED"
+                      ? "✓ Approved"
+                      : cert.status === "REJECTED"
+                        ? "Rejected"
+                        : "In review"}
+                  </span>
+                </div>
                 <p className="text-xs text-muted">
                   {cert.issuedAt ? `Issued ${cert.issuedAt}` : "Issue date not set"}
                 </p>
+                {cert.status === "REJECTED" && cert.reviewNote && (
+                  <p className="mt-1 text-xs text-red-500">Note: {cert.reviewNote}</p>
+                )}
               </div>
               <div className="flex gap-2">
                 <a

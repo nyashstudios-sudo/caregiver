@@ -1,6 +1,6 @@
 /* Caregiver service worker — installable PWA shell + Web Push notifications. */
 
-const VERSION = "caregiver-v3";
+const VERSION = "caregiver-v4";
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const PRECACHE = ["/offline.html", "/icon-192.png", "/icon-512.png"];
@@ -43,8 +43,12 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(PAGE_CACHE).then((cache) => cache.put(req, copy)).catch(() => undefined);
+          // Only ever cache successful, non-redirected documents so a stale
+          // error or redirect page can never be replayed as a landing page.
+          if (res.ok && !res.redirected) {
+            const copy = res.clone();
+            caches.open(PAGE_CACHE).then((cache) => cache.put(req, copy)).catch(() => undefined);
+          }
           return res;
         })
         .catch(async () =>

@@ -53,6 +53,17 @@ const ICONS = {
       <path d="m10 17 5-5-5-5m5 5H3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
+  chat: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-5 w-5">
+      <path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5Z" strokeLinejoin="round" />
+    </svg>
+  ),
+  user: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-5 w-5">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" strokeLinecap="round" />
+    </svg>
+  ),
 };
 
 function itemsFor(role: Role | undefined): Item[] {
@@ -61,6 +72,7 @@ function itemsFor(role: Role | undefined): Item[] {
       { href: "/", label: "Home", icon: ICONS.home },
       { href: "/caretakers", label: "Browse", icon: ICONS.search },
       { href: "/dashboard", label: "Requests", icon: ICONS.calendar },
+      { href: "/messages", label: "Messages", icon: ICONS.chat },
       { href: "/worker", label: "Portal", icon: ICONS.briefcase },
     ];
   }
@@ -69,7 +81,8 @@ function itemsFor(role: Role | undefined): Item[] {
       { href: "/", label: "Home", icon: ICONS.home },
       { href: "/admin", label: "Admin", icon: ICONS.grid },
       { href: "/dashboard", label: "Bookings", icon: ICONS.calendar },
-      { href: "/blog", label: "Blog", icon: ICONS.book },
+      { href: "/messages", label: "Messages", icon: ICONS.chat },
+      { href: "/account", label: "Account", icon: ICONS.user },
     ];
   }
   if (role === "CLIENT") {
@@ -77,7 +90,8 @@ function itemsFor(role: Role | undefined): Item[] {
       { href: "/", label: "Home", icon: ICONS.home },
       { href: "/caretakers", label: "Browse", icon: ICONS.search },
       { href: "/dashboard", label: "Bookings", icon: ICONS.calendar },
-      { href: "/blog", label: "Blog", icon: ICONS.book },
+      { href: "/messages", label: "Messages", icon: ICONS.chat },
+      { href: "/account", label: "Account", icon: ICONS.user },
     ];
   }
   return [

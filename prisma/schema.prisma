@@ -13,6 +13,12 @@ enum Role {
   ADMIN
 }
 
+/// Account lifecycle — admins can suspend abusive accounts from /admin/users.
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 enum BookingStatus {
   PENDING
   ACCEPTED
@@ -26,12 +32,21 @@ model User {
   phone         String?   @unique
   passwordHash  String
   role          Role      @default(CLIENT)
+  status        UserStatus @default(ACTIVE)
+  notifyByEmail Boolean   @default(true)
+  lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   profile       Profile?
   clientBookings Booking[] @relation("ClientBookings")
   workerBookings Booking[] @relation("WorkerBookings")
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  reviewsWritten   Review[]  @relation("ReviewsWritten")
+  reviewsReceived  Review[]  @relation("ReviewsReceived")
+  wallet           Wallet?
+  payments         Payment[]
 }
 
 model Profile {
@@ -73,14 +88,88 @@ model Certification {
 model Booking {
   id          String        @id @default(cuid())
   clientId    String
-  client      User          @relation("ClientBookings", fields: [clientId], references: [id])
+  client      User          @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
   workerId    String
-  worker      User          @relation("WorkerBookings", fields: [workerId], references: [id])
+  worker      User          @relation("WorkerBookings", fields: [workerId], references: [id], onDelete: Cascade)
   status      BookingStatus @default(PENDING)
   serviceDate DateTime
   notes       String?
+  /// Agreed value in KES at booking time (hourlyRate × hours).
+  amount      Float?
+  hours       Float?
+  /// Escrow lifecycle: paid → (completed → released to worker) or (cancelled → refunded).
+  paidAt      DateTime?
+  releasedAt  DateTime?
+  refundedAt  DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  reviews     Review[]
+  payments    Payment[]
+}
+
+/// Double-sided reputation: clients rate caretakers, caretakers rate clients
+/// (experience, reliability and payment) after a COMPLETED booking.
+model Review {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation("ReviewsWritten", fields: [authorId], references: [id], onDelete: Cascade)
+  targetId  String
+  target    User     @relation("ReviewsReceived", fields: [targetId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@unique([bookingId, authorId])
+  @@index([targetId, createdAt])
+}
+
+/// Per-user KES balance held by the platform (M-Pesa deposits, earnings, refunds).
+model Wallet {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance   Float    @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+enum PaymentKind {
+  BOOKING_PAYMENT /// client → platform (STK push), escrowed against a booking
+  WITHDRAWAL      /// platform → user (B2C) from wallet balance
+  REFUND          /// platform → client (B2C) after cancellation
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+/// Every M-Pesa movement, reconciled through Daraja callbacks.
+model Payment {
+  id                 String        @id @default(cuid())
+  userId             String
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookingId          String?
+  booking            Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  kind               PaymentKind
+  status             PaymentStatus @default(PENDING)
+  /// KES, always server-computed — never trusted from the client.
+  amount             Float
+  /// MSISDN in 254… form for STK/B2C rails.
+  phone              String?
+  checkoutRequestId String?       @unique
+  /// STK MerchantRequestID or B2C OriginatorConversationID — unique per push.
+  merchantRequestId String?       @unique
+  mpesaReceipt       String?
+  conversationId     String?
+  failureReason      String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, kind])
 }
 
 enum PostStatus {
@@ -107,11 +196,27 @@ model BlogPost {
 
 /// Messages sent from the Contact Us page.
 model ContactMessage {
-  id        String   @id @default(cuid())
-  name      String
-  email     String
-  phone     String?
-  subject   String?
-  message   String
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  name       String
+  email      String
+  phone      String?
+  subject    String?
+  message    String
+  handledAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+/// In-app messaging pipeline between any two signed-in users.
+model Message {
+  id         String    @id @default(cuid())
+  senderId   String
+  sender     User      @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User      @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  body       String
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([receiverId, readAt])
+  @@index([senderId, createdAt])
 }

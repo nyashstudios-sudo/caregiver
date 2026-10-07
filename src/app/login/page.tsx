@@ -1,9 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { LoginForm } from "@/components/LoginForm";
+import { googleEnabled } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Sign in",
+  robots: { index: false },
 };
 
 function single(value: string | string[] | undefined): string {
@@ -29,11 +31,17 @@ export default async function LoginPage({
         {single(sp.registered) && (
           <p className="field-ok mb-4">✓ Account created — sign in to continue.</p>
         )}
+        {single(sp.expired) && (
+          <p className="field-error mb-4">
+            Your session ended — the account may have been removed or signed
+            out elsewhere. Sign in again to continue.
+          </p>
+        )}
         {single(sp.error) && (
           <p className="field-error mb-4">Your session could not be restored, please sign in.</p>
         )}
 
-        <LoginForm next={single(sp.next)} />
+        <LoginForm next={single(sp.next)} googleEnabled={googleEnabled()} />
 
         <p className="mt-5 text-center text-sm text-muted">
           New here?{" "}

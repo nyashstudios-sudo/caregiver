@@ -595,6 +595,87 @@ async function main() {
     });
   }
 
+  // --- Demo DMs (messaging pipeline) -----------------------------------
+  const brianId = brian.user.id;
+  const minsAgo = (m: number) => new Date(Date.now() - m * 60_000);
+  if (amina && jane) {
+    await prisma.message.createMany({
+      data: [
+        {
+          senderId: jane.user.id,
+          receiverId: amina,
+          body: "Hi Amina! Are you available Tuesdays and Thursdays for the twins?",
+          createdAt: minsAgo(180),
+        },
+        {
+          senderId: amina,
+          receiverId: jane.user.id,
+          body: "Habari Jane! Yes, both days work —9 AM to1 PM as requested. I can start next week.",
+          createdAt: minsAgo(165),
+          readAt: minsAgo(160),
+        },
+        {
+          senderId: jane.user.id,
+          receiverId: amina,
+          body: "Perfect. I've sent a booking request too — please accept it when you can 🙏",
+          createdAt: minsAgo(150),
+        },
+        {
+          senderId: jane.user.id,
+          receiverId: amina,
+          body: "One more question: are you first-aid certified? The kids have allergies.",
+          createdAt: minsAgo(12),
+        },
+      ],
+    });
+  }
+  if (david && brianId) {
+    await prisma.message.createMany({
+      data: [
+        {
+          senderId: brianId,
+          receiverId: david,
+          body: "Hi David — do you do deep tissue sessions at home in Westlands?",
+          createdAt: minsAgo(90),
+        },
+        {
+          senderId: david,
+          receiverId: brianId,
+          body: "Yes! Home visits across Nairobi. My rate is KES800/hr, first session includes a short assessment.",
+          createdAt: minsAgo(80),
+          readAt: minsAgo(75),
+        },
+      ],
+    });
+  }
+
+  // --- Demo reviews (double-sided: client ↔ caretaker) ------------------
+  const completed = await prisma.booking.findFirst({ where: { status: "COMPLETED" } });
+  if (completed) {
+    // Client → caretaker review
+    await prisma.review.create({
+      data: {
+        bookingId: completed.id,
+        authorId: completed.clientId,
+        targetId: completed.workerId,
+        rating: 5,
+        comment:
+          "Sarah did an excellent deep clean and meal prep — punctual, careful with the kids' things, and the house was spotless. Highly recommended!",
+      },
+    });
+    // Caretaker → client review (double-sided)
+    await prisma.review.create({
+      data: {
+        bookingId: completed.id,
+        authorId: completed.workerId,
+        targetId: completed.clientId,
+        rating: 5,
+        comment:
+          "Brian is organised, gave a clear brief and payment was settled promptly. A pleasure to work with.",
+      },
+    }).catch(() => undefined);
+  }
+
   // --- Blog posts (SEO content) ----------------------------------------
   for (const post of POSTS) {
     await prisma.blogPost.upsert({
@@ -622,16 +703,17 @@ async function main() {
     });
   }
 
-  const [users, profiles, details, certs, bookings, posts] = await Promise.all([
+  const [users, profiles, details, certs, bookings, posts, dms] = await Promise.all([
     prisma.user.count(),
     prisma.profile.count(),
     prisma.caretakerDetails.count(),
     prisma.certification.count(),
     prisma.booking.count(),
     prisma.blogPost.count(),
+    prisma.message.count(),
   ]);
   console.log(
-    `Seed complete — users: ${users}, profiles: ${profiles}, caretaker details: ${details}, certifications: ${certs}, bookings: ${bookings}, posts: ${posts}`
+    `Seed complete — users: ${users}, profiles: ${profiles}, caretaker details: ${details}, certifications: ${certs}, bookings: ${bookings}, posts: ${posts}, dms: ${dms}`
   );
 }
 

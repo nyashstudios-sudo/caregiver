@@ -6,8 +6,15 @@ import {
   loginWithPhoneAction,
   sendOtpAction,
 } from "@/lib/actions/auth";
+import { GoogleButton } from "./GoogleButton";
 
-export function LoginForm({ next }: { next?: string }) {
+export function LoginForm({
+  next,
+  googleEnabled = false,
+}: {
+  next?: string;
+  googleEnabled?: boolean;
+}) {
   const [tab, setTab] = useState<"email" | "phone">("email");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -30,6 +37,16 @@ export function LoginForm({ next }: { next?: string }) {
 
   return (
     <div className="card p-6">
+      {googleEnabled && (
+        <div className="mb-5">
+          <GoogleButton mode="signin" next={next} />
+          <div className="my-4 flex items-center gap-3 text-xs text-muted">
+            <span className="h-px flex-1 bg-line" />
+            or use email
+            <span className="h-px flex-1 bg-line" />
+          </div>
+        </div>
+      )}
       <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1">
         <button
           type="button"

@@ -59,7 +59,7 @@ export default function OpengraphImage() {
         </div>
 
         <div style={{ marginTop: 44, display: "flex", gap: 14 }}>
-          {["✓ First Aid Certified", "✓ Professional Massage", "✓ Nairobi · Mombasa · Kisumu"].map(
+          {["• First Aid Certified", "• Professional Massage", "• Nairobi · Mombasa · Kisumu"].map(
             (label) => (
               <div
                 key={label}

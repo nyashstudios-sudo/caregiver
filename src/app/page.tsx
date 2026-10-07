@@ -74,7 +74,7 @@ const FAQ_PREVIEW = [
 export default async function HomePage() {
   const [featured, latestPosts, workerCount, bookingCount] = await Promise.all([
     prisma.profile.findMany({
-      where: { user: { role: "WORKER" }, caretakerDetails: { isNot: null } },
+      where: { user: { role: "WORKER", status: "ACTIVE" }, caretakerDetails: { isNot: null } },
       include: { caretakerDetails: { include: { certifications: true } } },
       orderBy: { createdAt: "desc" },
       take: 6,
@@ -92,8 +92,26 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* ── Hero (teal panel per mobile mock) ─────────────────────────── */}
-      <section className="bg-linear-to-br from-brand via-brand to-brand-strong dark:from-brand-strong dark:via-[#0b7f76] dark:to-[#0a5c56]">
+      {/* ── Hero (teal panel per mobile mock, photo background) ──────── */}
+      <section className="relative isolate overflow-hidden bg-linear-to-br from-brand via-brand to-brand-strong dark:from-brand-strong dark:via-[#0b7f76] dark:to-[#0a5c56]">
+        {/* Photographic backdrop — optimized WebP, preloaded via the <img> below. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/hero-bg.jpg"
+          srcSet="/hero-bg-800.webp 800w, /hero-bg.webp 1600w"
+          sizes="100vw"
+          alt=""
+          aria-hidden
+          className="absolute inset-0 -z-10 h-full w-full object-cover object-center opacity-70 dark:opacity-70"
+        />
+        {/*
+          Legibility scrim — strongest on the left where the headline sits,
+          fading to a light wash on the right so the photograph stays visible.
+        */}
+        <div
+          aria-hidden
+          className="absolute inset-0 -z-10 bg-linear-to-r from-brand-strong/85 via-brand/55 to-brand/20 dark:from-[#0a5c56]/90 dark:via-[#0b7f76]/65 dark:to-[#0b7f76]/30"
+        />
         <div className="container-page py-12 sm:py-16 lg:py-20">
           <div className="max-w-3xl">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/80 dark:text-[#9ff3e7]">

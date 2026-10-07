@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getSessionUser } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 
 export type ProfileState = { error?: string } | null;
 
@@ -12,8 +12,7 @@ function zodError(err: z.ZodError): string {
 }
 
 async function requireWorker() {
-  const user = await getSessionUser();
-  if (!user) redirect("/login?next=/worker");
+  const user = await requireSession("/worker");
   if (user.role !== "WORKER" && user.role !== "ADMIN") redirect("/dashboard");
   return user;
 }

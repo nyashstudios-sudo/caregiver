@@ -55,6 +55,13 @@ export const metadata: Metadata = {
   },
   robots: { index: true, follow: true },
   category: "Home care",
+  // PWA: installable + native-ish shell on mobile.
+  applicationName: "Caregiver",
+  appleWebApp: {
+    capable: true,
+    title: "Caregiver",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {

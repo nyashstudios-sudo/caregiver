@@ -3,13 +3,12 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getSessionUser } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 
 export type BlogState = { error?: string } | null;
 
 async function requireAdmin() {
-  const user = await getSessionUser();
-  if (!user) redirect("/login?next=/admin");
+  const user = await requireSession("/admin");
   if (user.role !== "ADMIN") redirect("/dashboard");
   return user;
 }

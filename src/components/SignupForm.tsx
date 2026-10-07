@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { signupAction } from "@/lib/actions/auth";
+import { GoogleButton } from "./GoogleButton";
 
 type Role = "CLIENT" | "WORKER";
 
@@ -20,7 +21,13 @@ const ROLE_CARDS: { value: Role; title: string; body: string; icon: string }[] =
   },
 ];
 
-export function SignupForm({ defaultRole = "CLIENT" }: { defaultRole?: Role }) {
+export function SignupForm({
+  defaultRole = "CLIENT",
+  googleEnabled = false,
+}: {
+  defaultRole?: Role;
+  googleEnabled?: boolean;
+}) {
   const [state, formAction, pending] = useActionState(signupAction, null);
   const [role, setRole] = useState<Role>(defaultRole);
   // Controlled fields so validation errors don't wipe what was typed
@@ -34,6 +41,17 @@ export function SignupForm({ defaultRole = "CLIENT" }: { defaultRole?: Role }) {
   return (
     <form action={formAction} className="card space-y-4 p-6">
       <input type="hidden" name="role" value={role} />
+
+      {googleEnabled && (
+        <div>
+          <GoogleButton mode="signup" role={role} />
+          <div className="my-4 flex items-center gap-3 text-xs text-muted">
+            <span className="h-px flex-1 bg-line" />
+            or join with email
+            <span className="h-px flex-1 bg-line" />
+          </div>
+        </div>
+      )}
 
       <fieldset>
         <legend className="label">Account type</legend>

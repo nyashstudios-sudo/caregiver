@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { getSessionUser } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 import {
   CertificationManager,
   WorkerProfileForm,
@@ -11,6 +11,7 @@ import {
 
 export const metadata: Metadata = {
   title: "Worker portal",
+  robots: { index: false },
 };
 
 export default async function WorkerPortalPage({
@@ -18,12 +19,10 @@ export default async function WorkerPortalPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  // Middleware already guards /worker; this keeps the server side authoritative.
-  const user = await getSessionUser();
-  if (!user) {
-    // unreachable in practice — middleware redirects first
-    return null;
-  }
+  // Middleware guards /worker on the edge (JWT only); requireSession re-checks
+  // the database so a revoked, deleted or suspended account can never render
+  // a portal — it lands on /login or the cookie-clearing escape hatch instead.
+  const user = await requireSession("/worker");
 
   const sp = await searchParams;
 

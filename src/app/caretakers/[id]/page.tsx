@@ -8,9 +8,24 @@ import { SkillBadges } from "@/components/Badges";
 import { BookingForm } from "@/components/BookingForm";
 import { formatKESRate } from "@/lib/format";
 
-export const metadata: Metadata = {
-  title: "Caretaker profile",
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const profile = await prisma.profile.findFirst({
+    where: { id, user: { role: "WORKER", status: "ACTIVE" } },
+    include: { caretakerDetails: { include: { certifications: true } } },
+  });
+  if (!profile?.caretakerDetails) return { title: "Caretaker not found" };
+
+  return {
+    title: `${profile.fullName} — caretaker profile in ${profile.location}`,
+    description: `Hire ${profile.fullName} in ${profile.location}. ${profile.caretakerDetails.yearsExperience} years experience, KES ${Math.round(profile.caretakerDetails.hourlyRate)}/hr, ${profile.caretakerDetails.certifications.length} verified credential${profile.caretakerDetails.certifications.length === 1 ? "" : "s"}. Read reviews and book with confidence.`,
+    alternates: { canonical: `/caretakers/${profile.id}` },
+  };
+}
 
 function formatDate(date: Date | null): string {
   if (!date) return "—";
@@ -25,7 +40,7 @@ export default async function CaretakerProfilePage({
   const { id } = await params;
 
   const profile = await prisma.profile.findFirst({
-    where: { id, user: { role: "WORKER" } },
+    where: { id, user: { role: "WORKER", status: "ACTIVE" } },
     include: {
       caretakerDetails: {
         include: { certifications: { orderBy: { issuedAt: "desc" } } },
@@ -41,6 +56,11 @@ export default async function CaretakerProfilePage({
     .split(",")
     .map((skill) => skill.trim())
     .filter(Boolean);
+
+  const canMessage = !!user && user.id !== profile.userId;
+  const completedJobs = await prisma.booking.count({
+    where: { workerId: profile.userId, status: "COMPLETED" },
+  });
 
   return (
     <div className="container-page py-6 sm:py-8">
@@ -62,6 +82,7 @@ export default async function CaretakerProfilePage({
           />
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <h1 className="text-2xl font-extrabold sm:text-3xl">{profile.fullName}</h1>
+            <span className="badge bg-teal-400/20 text-teal-200">✓ Verified profile</span>
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
@@ -70,9 +91,14 @@ export default async function CaretakerProfilePage({
             <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
               {details.yearsExperience} yrs experience
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
+            <span className="inline-flex items-center gap-1 rounded-full bg-teal-400/25 px-3 py-1 text-xs font-bold text-teal-100">
               {formatKESRate(details.hourlyRate)}
             </span>
+            {completedJobs > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
+                ⭐ {completedJobs} completed job{completedJobs === 1 ? "" : "s"}
+              </span>
+            )}
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
             <SkillBadges
@@ -84,14 +110,18 @@ export default async function CaretakerProfilePage({
               {details.certifications.length === 1 ? "" : "s"} on file
             </span>
           </div>
-          {user?.role === "CLIENT" && (
-            <a
-              href="#booking"
-              className="btn btn-primary mt-5 w-full max-w-xs sm:hidden"
-            >
-              Request booking
-            </a>
-          )}
+          <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+            {canMessage && (
+              <Link href={`/messages/${profile.userId}`} className="btn btn-secondary !border-white/30 !bg-white/10 !text-white hover:!bg-white/20">
+                ✉️ Message {profile.fullName.split(" ")[0]}
+              </Link>
+            )}
+            {user?.role === "CLIENT" && (
+              <a href="#booking" className="btn btn-primary w-full max-w-xs sm:w-auto">
+                Request booking
+              </a>
+            )}
+          </div>
         </div>
 
         {/* Body */}
@@ -109,7 +139,7 @@ export default async function CaretakerProfilePage({
               <div className="card divide-y divide-line">
                 {skills.length > 0 ? (
                   skills.map((skill) => (
-                    <div key={skill} className="flex items-center justify-between px-4 py-3">
+                    <div key={skill} className="dl-row">
                       <span className="text-sm font-medium text-ink">{skill}</span>
                       <span className="text-sm font-bold text-brand">
                         {formatKESRate(details.hourlyRate)}
@@ -117,7 +147,7 @@ export default async function CaretakerProfilePage({
                     </div>
                   ))
                 ) : (
-                  <div className="flex items-center justify-between px-4 py-3">
+                  <div className="dl-row">
                     <span className="text-sm font-medium text-ink">General care services</span>
                     <span className="text-sm font-bold text-brand">
                       {formatKESRate(details.hourlyRate)}
@@ -159,6 +189,17 @@ export default async function CaretakerProfilePage({
 
           {/* Sidebar */}
           <aside className="space-y-5" id="booking">
+            {canMessage && (
+              <div className="card p-5">
+                <p className="mb-1 font-bold text-ink">Questions for {profile.fullName.split(" ")[0]}?</p>
+                <p className="mb-3 text-sm text-muted">
+                  Message directly — most caretakers reply within a few hours.
+                </p>
+                <Link href={`/messages/${profile.userId}`} className="btn btn-primary w-full">
+                  ✉️ Send a message
+                </Link>
+              </div>
+            )}
             {user?.role === "CLIENT" ? (
               <BookingForm workerId={profile.userId} workerName={profile.fullName} />
             ) : user ? (

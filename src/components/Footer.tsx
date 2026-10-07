@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogoMark } from "./Logo";
 
 const COLUMNS = [
   {
@@ -35,12 +36,7 @@ export function Footer() {
       <div className="container-page grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="mb-3 flex items-center gap-2.5">
-            <span
-              aria-hidden
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-base font-black text-white dark:text-[#04231f]"
-            >
-              C
-            </span>
+            <LogoMark size={36} />
             <span className="text-xl font-extrabold tracking-tight text-ink">Caregiver</span>
           </div>
           <p className="max-w-xs text-sm leading-relaxed text-muted">

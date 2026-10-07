@@ -49,3 +49,8 @@ next-env.d.ts
 # local artifacts
 .build.log
 .uploads/
+
+# editor/tooling
+.freebuff/
+.DS_Store
+Thumbs.db

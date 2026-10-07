@@ -1,9 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { SignupForm } from "@/components/SignupForm";
+import { googleEnabled } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Create account",
+  robots: { index: false },
 };
 
 function single(value: string | string[] | undefined): string {
@@ -28,7 +30,7 @@ export default async function SignupPage({
           Choose how you want to use the platform — you can start hiring or working right away.
         </p>
 
-        <SignupForm defaultRole={defaultRole} />
+        <SignupForm defaultRole={defaultRole} googleEnabled={googleEnabled()} />
 
         <p className="mt-5 text-center text-sm text-muted">
           Already have an account?{" "}

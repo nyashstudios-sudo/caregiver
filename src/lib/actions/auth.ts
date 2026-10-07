@@ -119,6 +119,12 @@ export async function loginAction(
     registerFailure(throttleKey);
     return { error: "Invalid email or password" };
   }
+  if (user.status === "SUSPENDED") {
+    return {
+      error:
+        "This account has been suspended. Please contact Caregiver support on info@caregiver.co.ke.",
+    };
+  }
   clearFailures(throttleKey);
 
   try {
@@ -179,6 +185,9 @@ export async function loginWithPhoneAction(
 
   const user = await prisma.user.findUnique({ where: { phone } });
   if (!user) return { error: "No account is linked to this phone number" };
+  if (user.status === "SUSPENDED") {
+    return { error: "This account has been suspended. Please contact support." };
+  }
 
   try {
     await signIn("phone", { phone, code, redirect: false });

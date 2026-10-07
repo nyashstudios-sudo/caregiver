@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 import { AdminTabs } from "@/components/AdminTabs";
 
 export default async function AdminLayout({
@@ -8,8 +8,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getSessionUser();
-  if (!user) redirect("/login?next=/admin");
+  const user = await requireSession("/admin");
   if (user.role !== "ADMIN") redirect("/dashboard");
 
   return (

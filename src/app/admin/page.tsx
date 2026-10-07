@@ -25,15 +25,29 @@ function Stat({ label, value, href }: { label: string; value: number; href?: str
 }
 
 export default async function AdminOverviewPage() {
-  const [clients, workers, pendingBookings, publishedPosts, draftPosts, messages] =
-    await Promise.all([
-      prisma.user.count({ where: { role: "CLIENT" } }),
-      prisma.user.count({ where: { role: "WORKER" } }),
-      prisma.booking.count({ where: { status: "PENDING" } }),
-      prisma.blogPost.count({ where: { status: "PUBLISHED" } }),
-      prisma.blogPost.count({ where: { status: "DRAFT" } }),
-      prisma.contactMessage.count(),
-    ]);
+  const [
+    clients,
+    workers,
+    pendingBookings,
+    publishedPosts,
+    draftPosts,
+    messages,
+    openMessages,
+    suspended,
+    newUsers7d,
+    unreadThreads,
+  ] = await Promise.all([
+    prisma.user.count({ where: { role: "CLIENT", status: "ACTIVE" } }),
+    prisma.user.count({ where: { role: "WORKER", status: "ACTIVE" } }),
+    prisma.booking.count({ where: { status: "PENDING" } }),
+    prisma.blogPost.count({ where: { status: "PUBLISHED" } }),
+    prisma.blogPost.count({ where: { status: "DRAFT" } }),
+    prisma.contactMessage.count(),
+    prisma.contactMessage.count({ where: { handledAt: null } }),
+    prisma.user.count({ where: { status: "SUSPENDED" } }),
+    prisma.user.count({ where: { createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } } }),
+    prisma.message.count({ where: { readAt: null } }),
+  ]);
 
   const recentBookings = await prisma.booking.findMany({
     take: 5,
@@ -53,20 +67,26 @@ export default async function AdminOverviewPage() {
     <div className="space-y-8">
       <section>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <Stat label="Clients" value={clients} />
-          <Stat label="Workers" value={workers} href="/caretakers" />
-          <Stat label="Pending bookings" value={pendingBookings} href="/dashboard" />
+          <Stat label="Active clients" value={clients} href="/admin/users?role=CLIENT" />
+          <Stat label="Active workers" value={workers} href="/admin/users?role=WORKER" />
+          <Stat label="Pending bookings" value={pendingBookings} href="/admin/bookings?status=PENDING" />
+          <Stat label="New users (7d)" value={newUsers7d} href="/admin/users" />
+          <Stat label="Open contact msgs" value={openMessages} href="/admin/messages" />
+          <Stat label="Unread DMs" value={unreadThreads} href="/messages" />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Published posts" value={publishedPosts} href="/blog" />
           <Stat label="Drafts" value={draftPosts} href="/admin/posts" />
-          <Stat label="Messages" value={messages} href="/admin/messages" />
+          <Stat label="Contact messages (all)" value={messages} href="/admin/messages" />
+          <Stat label="Suspended users" value={suspended} href="/admin/users?status=SUSPENDED" />
         </div>
       </section>
 
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-ink">Latest bookings</h2>
-          <Link href="/dashboard" className="text-sm font-semibold text-brand hover:underline">
-            View all →
+          <Link href="/admin/bookings" className="text-sm font-semibold text-brand hover:underline">
+            Monitor all →
           </Link>
         </div>
         {recentBookings.length === 0 ? (

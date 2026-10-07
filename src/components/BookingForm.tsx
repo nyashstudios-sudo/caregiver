@@ -41,19 +41,37 @@ export function BookingForm({
         </p>
       )}
 
-      <div className="mb-3">
-        <label className="label" htmlFor="serviceDate">
-          Service date &amp; time
-        </label>
-        <input
-          className="input"
-          id="serviceDate"
-          name="serviceDate"
-          type="datetime-local"
-          required
-          value={when}
-          onChange={(e) => setWhen(e.target.value)}
-        />
+      <div className="mb-3 grid grid-cols-2 gap-3">
+        <div>
+          <label className="label" htmlFor="serviceDate">
+            Service date &amp; time
+          </label>
+          <input
+            className="input"
+            id="serviceDate"
+            name="serviceDate"
+            type="datetime-local"
+            required
+            value={when}
+            onChange={(e) => setWhen(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="hours">
+            Hours
+          </label>
+          <input
+            className="input"
+            id="hours"
+            name="hours"
+            type="number"
+            min={1}
+            max={12}
+            step={1}
+            defaultValue={4}
+            required
+          />
+        </div>
       </div>
 
       <div className="mb-4">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ThemeToggle } from "./ThemeToggle";
+import { Logo } from "./Logo";
 import { signOutAction } from "@/lib/actions/auth";
 import type { SessionUser } from "@/lib/session";
 
@@ -17,9 +18,9 @@ function initialsOf(name: string | null, email: string): string {
 const NAV_LINKS = [
   { href: "/caretakers", label: "Find caretakers" },
   { href: "/blog", label: "Blog" },
-  { href: "/faq", label: "FAQ" },
-  { href: "/about", label: "About" },
-  { href: "/contact", label: "Contact" },
+  { href: "/faq", label: "FAQ", authOnlyHide: true },
+  { href: "/about", label: "About", authOnlyHide: true },
+  { href: "/contact", label: "Contact", authOnlyHide: true },
 ];
 
 export function Header({ user }: { user: SessionUser | null }) {
@@ -27,21 +28,11 @@ export function Header({ user }: { user: SessionUser | null }) {
     <header className="sticky top-0 z-40 border-b border-line bg-surface/85 backdrop-blur-md">
       <div className="container-page flex h-16 items-center justify-between gap-3">
         {/* Brand */}
-        <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <span
-            aria-hidden
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-base font-black text-white dark:text-[#04231f]"
-          >
-            C
-          </span>
-          <span className="text-xl font-extrabold tracking-tight text-ink">
-            Caregiver
-          </span>
-        </Link>
+        <Logo size={36} />
 
-        {/* Desktop nav */}
+        {/* Desktop nav — informational links drop out once signed in */}
         <nav className="hidden items-center gap-6 text-sm font-medium text-muted lg:flex">
-          {NAV_LINKS.map((link) => (
+          {NAV_LINKS.filter((link) => !link.authOnlyHide || !user).map((link) => (
             <Link key={link.href} href={link.href} className="transition hover:text-brand">
               {link.label}
             </Link>
@@ -56,6 +47,16 @@ export function Header({ user }: { user: SessionUser | null }) {
               Worker portal
             </Link>
           )}
+          {user && (
+            <Link href="/messages" className="transition hover:text-brand">
+              Messages
+            </Link>
+          )}
+          {user && (
+            <Link href="/wallet" className="transition hover:text-brand">
+              Wallet
+            </Link>
+          )}
           {user && user.role === "ADMIN" && (
             <Link href="/admin" className="transition hover:text-brand">
               Admin
@@ -68,14 +69,21 @@ export function Header({ user }: { user: SessionUser | null }) {
           <ThemeToggle />
           {user ? (
             <>
-              <span className="hidden items-center gap-2 text-sm text-ink md:flex">
+              <Link
+                href="/account"
+                className="hidden items-center gap-2 text-sm text-ink transition hover:text-brand md:flex"
+                title="Account settings"
+              >
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand-on-soft">
                   {initialsOf(user.name, user.email)}
                 </span>
                 <span className="max-w-[9rem] truncate font-semibold">
                   {user.name || user.email}
                 </span>
-              </span>
+              </Link>
+              <Link href="/messages" className="btn btn-secondary sm:hidden" aria-label="Messages">
+                ✉️
+              </Link>
               <form action={signOutAction}>
                 <button type="submit" className="btn btn-secondary">
                   Sign out

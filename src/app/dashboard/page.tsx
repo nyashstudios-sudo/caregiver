@@ -1,14 +1,17 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { getSessionUser } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 import { Avatar } from "@/components/Avatar";
 import { StatusBadge } from "@/components/Badges";
 import { updateBookingAction } from "@/lib/actions/bookings";
+import { PayBookingButton } from "@/components/PayButtons";
+import { ReviewForm } from "@/components/ReviewForm";
+import { formatKES } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: "Bookings dashboard",
+  robots: { index: false },
 };
 
 function formatDate(date: Date): string {
@@ -41,8 +44,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getSessionUser();
-  if (!user) redirect("/login?next=/dashboard");
+  const user = await requireSession("/dashboard");
 
   const sp = await searchParams;
 
@@ -61,6 +63,17 @@ export default async function DashboardPage({
     },
     orderBy: { serviceDate: "desc" },
   });
+
+  // Which of these bookings have I already reviewed? (double-sided pipeline)
+  const myReviews = await prisma.review.findMany({
+    where: { authorId: user.id, bookingId: { in: bookings.map((b) => b.id) } },
+    select: { bookingId: true },
+  });
+  const reviewedBookingIds = new Set(myReviews.map((r) => r.bookingId));
+
+  const myPhone =
+    (await prisma.user.findUnique({ where: { id: user.id }, select: { phone: true } }))?.phone ??
+    "";
 
   const pending = bookings.filter((b) => b.status === "PENDING").length;
   const accepted = bookings.filter((b) => b.status === "ACCEPTED").length;
@@ -164,6 +177,23 @@ export default async function DashboardPage({
                       <p className="mt-1 text-sm font-medium text-ink">
                         📅 {formatDate(booking.serviceDate)}
                       </p>
+                      {booking.amount ? (
+                        <p className="mt-1 text-sm font-semibold text-brand">
+                          💰 {formatKES(booking.amount)}
+                          {booking.hours ? ` · ${booking.hours}h` : ""}{" "}
+                          {booking.paidAt ? (
+                            <span className="badge badge-green ml-1">Paid</span>
+                          ) : booking.status !== "CANCELLED" ? (
+                            <span className="badge badge-amber ml-1">Unpaid</span>
+                          ) : null}
+                          {booking.releasedAt && (
+                            <span className="badge badge-green ml-1">Released</span>
+                          )}
+                          {booking.refundedAt && (
+                            <span className="badge badge-slate ml-1">Refunded</span>
+                          )}
+                        </p>
+                      ) : null}
                       {booking.notes && (
                         <p className="mt-1 text-sm text-muted">“{booking.notes}”</p>
                       )}
@@ -171,6 +201,9 @@ export default async function DashboardPage({
                   </div>
 
                   <div className="flex shrink-0 flex-wrap gap-2">
+                    <Link href={`/messages/${counterpart.id}`} className="btn btn-secondary">
+                      ✉️ Message
+                    </Link>
                     {canManage && booking.status === "PENDING" && (
                       <form action={updateBookingAction}>
                         <input type="hidden" name="id" value={booking.id} />
@@ -200,6 +233,40 @@ export default async function DashboardPage({
                     )}
                   </div>
                 </div>
+
+                {/* Payment strip — client pays the agreed amount via STK push */}
+                {isClientView &&
+                  booking.amount != null &&
+                  booking.amount > 0 &&
+                  !booking.paidAt &&
+                  booking.status !== "CANCELLED" &&
+                  booking.status !== "COMPLETED" && (
+                    <div className="mt-4 border-t border-line pt-4">
+                      <PayBookingButton
+                        bookingId={booking.id}
+                        amount={Math.round(booking.amount)}
+                        defaultPhone={myPhone}
+                      />
+                    </div>
+                  )}
+                {booking.paidAt && !booking.releasedAt && !booking.refundedAt && (
+                  <p className="mt-3 text-xs text-muted">
+                    🔒 Escrow: funds are held safely and released to the caretaker when the job
+                    is completed.
+                  </p>
+                )}
+
+                {/* Review strip — both sides rate each other after completion */}
+                {booking.status === "COMPLETED" &&
+                  !reviewedBookingIds.has(booking.id) &&
+                  (isClientView || user.role === "WORKER") && (
+                    <div className="mt-4 border-t border-line pt-4">
+                      <ReviewForm
+                        bookingId={booking.id}
+                        targetLabel={name.split(" ")[0]}
+                      />
+                    </div>
+                  )}
               </li>
             );
           })}

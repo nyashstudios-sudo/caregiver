@@ -52,7 +52,7 @@ export default async function CaretakersPage({
 
   const profiles = await prisma.profile.findMany({
     where: {
-      user: { role: "WORKER" },
+      user: { role: "WORKER", status: "ACTIVE" },
       caretakerDetails: { isNot: null },
       ...(conditions.length ? { AND: conditions } : {}),
     },

@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getSessionUser } from "@/lib/session";
+import { requireSession } from "@/lib/session";
+import { releaseEarnings, refundToWallet } from "@/lib/payments";
 
 export type BookingState = { error?: string } | null;
 
@@ -11,13 +12,13 @@ export async function createBookingAction(
   _prev: BookingState,
   formData: FormData
 ): Promise<BookingState> {
-  const user = await getSessionUser();
-  if (!user) return { error: "Please sign in as a client to book a caretaker" };
+  const user = await requireSession("/dashboard");
   if (user.role !== "CLIENT") return { error: "Only client accounts can book caretakers" };
 
   const workerId = String(formData.get("workerId") ?? "");
   const when = String(formData.get("serviceDate") ?? "");
   const notes = String(formData.get("notes") ?? "").trim();
+  const hours = Math.min(12, Math.max(1, Number(formData.get("hours")) || 4));
 
   const serviceDate = new Date(when);
   if (!workerId) return { error: "Caretaker not found" };
@@ -28,9 +29,14 @@ export async function createBookingAction(
 
   const worker = await prisma.user.findFirst({
     where: { id: workerId, role: "WORKER" },
-    include: { profile: true },
+    include: { profile: { include: { caretakerDetails: true } } },
   });
-  if (!worker?.profile) return { error: "Caretaker not found" };
+  if (!worker?.profile?.caretakerDetails) return { error: "Caretaker not found" };
+
+  // Agreed value computed server-side from the caretaker's current rate —
+  // the client can never post their own amount.
+  const hourlyRate = worker.profile.caretakerDetails.hourlyRate;
+  const amount = Math.round(hourlyRate * hours * 100) / 100;
 
   await prisma.booking.create({
     data: {
@@ -38,6 +44,8 @@ export async function createBookingAction(
       workerId,
       serviceDate,
       notes: notes || null,
+      hours,
+      amount,
       status: "PENDING",
     },
   });
@@ -55,8 +63,7 @@ export type BookingIntent = "accept" | "complete" | "cancel";
  *  - admins may act on any booking.
  */
 export async function updateBookingAction(formData: FormData): Promise<void> {
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
+  const user = await requireSession("/dashboard");
 
   const id = String(formData.get("id") ?? "");
   const intent = String(formData.get("intent") ?? "") as BookingIntent;
@@ -84,7 +91,13 @@ export async function updateBookingAction(formData: FormData): Promise<void> {
   }
 
   if (next) {
-    await prisma.booking.update({ where: { id }, data: { status: next } });
+    const updated = await prisma.booking.update({
+      where: { id },
+      data: { status: next },
+    });
+    // Escrow: completed → pay the caretaker; cancelled after payment → refund client.
+    if (next === "COMPLETED") await releaseEarnings(updated).catch(() => false);
+    if (next === "CANCELLED") await refundToWallet(updated).catch(() => false);
   }
 
   redirect("/dashboard?updated=1");

@@ -29,7 +29,10 @@ export default auth((req) => {
   if (
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/worker") ||
-    pathname.startsWith("/admin")
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/messages") ||
+    pathname.startsWith("/account") ||
+    pathname.startsWith("/wallet")
   ) {
     const url = new URL("/login", req.nextUrl);
     url.searchParams.set("next", pathname);
@@ -40,5 +43,14 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/worker/:path*", "/admin/:path*", "/login", "/signup"],
+  matcher: [
+    "/dashboard/:path*",
+    "/worker/:path*",
+    "/admin/:path*",
+    "/messages/:path*",
+    "/account/:path*",
+    "/wallet/:path*",
+    "/login",
+    "/signup",
+  ],
 };
